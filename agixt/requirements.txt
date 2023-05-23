@@ -7,6 +7,7 @@ llama-cpp-python
 accelerate
 nomic
 ####
+chromadb
 argparse
 anthropic
 beautifulsoup4
@@ -52,4 +53,4 @@ hugchat
 flask-bcrypt
 revChatGPT
 random-password-generator
-gpt4free
+cryptography==38.0.4
