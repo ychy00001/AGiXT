@@ -17,9 +17,20 @@ class FastchatProvider:
 
     def instruct(self, prompt, tokens: int = 0):
         messages = [{"role": "system", "content": prompt}]
-        params = {"model": self.MODEL_PATH, "messages": messages}
+        params = {"model": self.MODEL_PATH, "prompt": prompt}
         response = requests.post(
-            f"{self.AI_PROVIDER_URI}/v1/chat/completions",
-            json={"data": [json.dumps([prompt, params])]},
-        )
-        return response.json()["data"][0].replace("\n", "\n")
+                f"{self.AI_PROVIDER_URI}/v1/chat/completions",
+                json=params,
+                timeout=600,
+            )
+        #response = requests.post(
+        #    f"{self.AI_PROVIDER_URI}/v1/chat/completions",
+            #json={"data": [json.dumps([prompt, params])]},
+        #    json=json.dumps(params),
+        #)
+        #return response.json()["data"][0].replace("\n", "\n")
+        result = response.json()["text"]
+        print(f"Fast Chat request : {result}")
+        out = result[len(prompt):].replace("\n", "\n") 
+        print(f"Fast Chat substring : {out}")
+        return out

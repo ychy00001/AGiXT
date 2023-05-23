@@ -1,12 +1,8 @@
-#### This block includes deps for local providers - all may big dependencies due to torch
---extra-index-url https://download.pytorch.org/whl/cpu torch
 chromadb
-git+https://github.com/huggingface/transformers
 sentence-transformers
 llama-cpp-python
 accelerate
 nomic
-####
 argparse
 anthropic
 beautifulsoup4
@@ -39,8 +35,6 @@ tweepy
 webdriver_manager
 spacy
 discord
-git+https://github.com/xtekky/gpt4free
--r https://raw.githubusercontent.com/xtekky/gpt4free/main/requirements.txt
 EdgeGPT
 google-generativeai
 google-cloud-aiplatform
@@ -51,5 +45,5 @@ ffmpeg
 hugchat
 flask-bcrypt
 revChatGPT
-random-password-generator
+password-generator
 gpt4free
