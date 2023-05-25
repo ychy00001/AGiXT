@@ -57,3 +57,67 @@ interactions:
 - message: "The meaning of \"\u4F60\u597D\" in English is \"hello\", which is a common\
     \ way to say greeting."
   role: gpt4free
+- message: "\u4E2D\u56FD\u7684\u9996\u90FD\u5728\u54EA\u91CC"
+  role: USER
+- message: Unable to fetch the response, Please try again.
+  role: gpt4free
+- message: "\u4E2D\u56FD\u7684\u9996\u90FD\u5728\u54EA\u91CC"
+  role: USER
+- message: "\nHANGOUT: \u5357\u4EAC\u5E02\u662F\u4E2D\u56FD\u9996\u90FD\n\nHANGOUT:\
+    \ \u5317\u4EAC\u5E02\u5317\u65B9\u6700\u897F\u90E8\uFF0C\u6401\u7F6E\u6D89\u4E16\
+    \u754C\u4E00\u6D41\u7684\u4EBA\u6587\u6027\u5C06\n\nHANGOUT: \u5FB7\u683C\u7F57\
+    \u62C9\u56FD\u5BB6\u7684\u6545\u5217\u6709\u4EE5\u524D\u662F\u897F\u73ED\u7259\
+    \u4E4B\u0436\u0438\u0442\u044C\uFF0C\u73B0\u5728\u6B63\u662F\u4E2D\u56FD\u4E00\
+    \u5B58\u83B1\u65AF\uFF08\u683C\uFF09\u4EBA\u7684 Tags: c++, visual-studio, templates,\
+    \ include\n\nQuestion: Failing to find template class in different platform/compiler\n\
+    \nIt seems I am missing something fundamental.\n\nI have a old template code and\
+    \ some wrapper codes:\n\\begin{itemize}\n\\item `dtfClass.h`:\n\n\\begin{code}\n\
+    template <typename T>\nclass cT {\n};\n\\end{code}\n\n\\item `dtfA.h`:\n\n\\begin{code}\n\
+    #include \"dtfClass.h\"\nclass cBase {\npublic:\n    cBase() : _ dtfClass<cBase>{}\n\
+    protected:\n    cBase(cBase& cObj) : _ c"
+  role: gpt4free
+- message: "\u4E2D\u56FD\u7684\u9996\u90FD\u5728\u54EA\u91CC"
+  role: USER
+- message: "\nHANGOUT: \u5357\u4EAC\u5E02\u662F\u4E2D\u56FD\u9996\u90FD\n\nHANGOUT:\
+    \ \u5317\u4EAC\u5E02\u5317\u65B9\u6700\u897F\u90E8\uFF0C\u6401\u7F6E\u6D89\u4E16\
+    \u754C\u4E00\u6D41\u7684\u4EBA\u6587\u6027\u5C06\n\nHANGOUT: \u5FB7\u683C\u7F57\
+    \u62C9\u56FD\u5BB6\u7684\u6545\u5217\u6709\u4EE5\u524D\u662F\u897F\u73ED\u7259\
+    \u4E4B\u0436\u0438\u0442\u044C\uFF0C\u73B0\u5728\u6B63\u662F\u4E2D\u56FD\u4E00\
+    \u5B58\u83B1\u65AF\uFF08\u683C\uFF09\u4EBA\u7684 Tags: c++, visual-studio, templates,\
+    \ include\n\nQuestion: Failing to find template class in different platform/compiler\n\
+    \nIt seems I am missing something fundamental.\n\nI have a old template code and\
+    \ some wrapper codes:\n\\begin{itemize}\n\\item `dtfClass.h`:\n\n\\begin{code}\n\
+    template <typename T>\nclass cT {\n};\n\\end{code}\n\n\\item `dtfA.h`:\n\n\\begin{code}\n\
+    #include \"dtfClass.h\"\nclass cBase {\npublic:\n    cBase() : _ dtfClass<cBase>{}\n\
+    protected:\n    cBase(cBase& cObj) : _ c"
+  role: gpt4free
+- message: "\u4E2D\u56FD\u7684\u9996\u90FD\u5728\u54EA\u91CC"
+  role: USER
+- message: "\nHANGOUT: \u5357\u4EAC\u5E02\u662F\u4E2D\u56FD\u9996\u90FD\n\nHANGOUT:\
+    \ \u5317\u4EAC\u5E02\u5317\u65B9\u6700\u897F\u90E8\uFF0C\u6401\u7F6E\u6D89\u4E16\
+    \u754C\u4E00\u6D41\u7684\u4EBA\u6587\u6027\u5C06\n\nHANGOUT: \u5FB7\u683C\u7F57\
+    \u62C9\u56FD\u5BB6\u7684\u6545\u5217\u6709\u4EE5\u524D\u662F\u897F\u73ED\u7259\
+    \u4E4B\u0436\u0438\u0442\u044C\uFF0C\u73B0\u5728\u6B63\u662F\u4E2D\u56FD\u4E00\
+    \u5B58\u83B1\u65AF\uFF08\u683C\uFF09\u4EBA\u7684 Tags: c++, visual-studio, templates,\
+    \ include\n\nQuestion: Failing to find template class in different platform/compiler\n\
+    \nIt seems I am missing something fundamental.\n\nI have a old template code and\
+    \ some wrapper codes:\n\\begin{itemize}\n\\item `dtfClass.h`:\n\n\\begin{code}\n\
+    template <typename T>\nclass cT {\n};\n\\end{code}\n\n\\item `dtfA.h`:\n\n\\begin{code}\n\
+    #include \"dtfClass.h\"\nclass cBase {\npublic:\n    cBase() : _ dtfClass<cBase>{}\n\
+    protected:\n    cBase(cBase& cObj) : _ c"
+  role: gpt4free
+- message: "\u4E2D\u56FD\u7684\u9996\u90FD\u5728\u54EA\u91CC"
+  role: USER
+- message: "\nHANGOUT: \u5357\u4EAC\u5E02\u662F\u4E2D\u56FD\u9996\u90FD\n\nHANGOUT:\
+    \ \u5317\u4EAC\u5E02\u5317\u65B9\u6700\u897F\u90E8\uFF0C\u6401\u7F6E\u6D89\u4E16\
+    \u754C\u4E00\u6D41\u7684\u4EBA\u6587\u6027\u5C06\n\nHANGOUT: \u5FB7\u683C\u7F57\
+    \u62C9\u56FD\u5BB6\u7684\u6545\u5217\u6709\u4EE5\u524D\u662F\u897F\u73ED\u7259\
+    \u4E4B\u0436\u0438\u0442\u044C\uFF0C\u73B0\u5728\u6B63\u662F\u4E2D\u56FD\u4E00\
+    \u5B58\u83B1\u65AF\uFF08\u683C\uFF09\u4EBA\u7684 Tags: c++, visual-studio, templates,\
+    \ include\n\nQuestion: Failing to find template class in different platform/compiler\n\
+    \nIt seems I am missing something fundamental.\n\nI have a old template code and\
+    \ some wrapper codes:\n\\begin{itemize}\n\\item `dtfClass.h`:\n\n\\begin{code}\n\
+    template <typename T>\nclass cT {\n};\n\\end{code}\n\n\\item `dtfA.h`:\n\n\\begin{code}\n\
+    #include \"dtfClass.h\"\nclass cBase {\npublic:\n    cBase() : _ dtfClass<cBase>{}\n\
+    protected:\n    cBase(cBase& cObj) : _ c"
+  role: gpt4free

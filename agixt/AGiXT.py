@@ -8,10 +8,11 @@ from Agent import Agent
 from CustomPrompt import CustomPrompt
 from duckduckgo_search import ddg
 from urllib.parse import urlparse
-
+from log import logger
 
 class AGiXT:
     def __init__(self, agent_name: str = "AGiXT"):
+        logger.info(f"构造AGiXT{agent_name}")
         self.agent_name = agent_name
         self.agent = Agent(self.agent_name)
         self.stop_running_event = None
@@ -94,7 +95,9 @@ class AGiXT:
             prompt=prompt,
             **kwargs,
         )
+        logger.info(f"当前Agent:{self.agent_name}")
         if websearch:
+            logger.info(f"执行WebSearch:{self.agent_name}")
             if async_exec:
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
@@ -104,6 +107,7 @@ class AGiXT:
             else:
                 self.websearch_agent(task=task, depth=websearch_depth)
         try:
+            logger.info(f"调用Agent[{self.agent_name}] instruct")
             self.response = self.agent.instruct(formatted_prompt, tokens=tokens)
         except Exception as e:
             print(f"Error: {e}")
