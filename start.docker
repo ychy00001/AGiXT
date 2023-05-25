@@ -1,0 +1,1 @@
+docker-compose --profile all -f docker-compose.yml -f docker-compose.dev.yaml up

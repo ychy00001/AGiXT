@@ -1,0 +1,49 @@
+version: "3.8"
+services:
+  frontend:
+    image: ghcr.io/jamesonrgrieve/agent-llm-frontend:main
+    init: true
+    environment:
+      - HTTP_PROXY=http://host.docker.internal:7890
+      - HTTPS_PROXY=http://host.docker.internal:7890
+      - ALL_PROXY=socks5://host.docker.internal:7890
+      - NO_PROXY=.example.org,127.0.0.0/8,backend,8.213.133.13
+      - NEXT_PUBLIC_API_URI= ${NEXT_PUBLIC_API_URI:-http://backend:7437}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    profiles: [ "all", "frontend" ]
+
+  backend:
+    image: joshxt/agixt:main
+    init: true
+    ports:
+      - "7437:7437"
+   environment:
+      - HTTP_PROXY=http://host.docker.internal:7890
+      - HTTPS_PROXY=http://host.docker.internal:7890
+      - ALL_PROXY=socks5://host.docker.internal:7890
+      - NO_PROXY=.example.org,127.0.0.0/8,8.213.133.13
+    volumes:
+      - ./xtagi/agents:/xtagi/agents:rw
+      - ./xtagi/workspace:/xtagi/WORKSPACE:rw
+      - ./xtagi/models:/xtagi/model:rw
+    profiles: [ "all", "backend", "frontend" ]
+
+  backend-streamlit:
+    image: joshxt/agixt:main
+    entrypoint: [ "streamlit", "run", "Main.py" ]
+    init: true
+    environment:
+      - HTTP_PROXY=http://host.docker.internal:7890
+      - HTTPS_PROXY=http://host.docker.internal:7890
+      - ALL_PROXY=socks5://host.docker.internal:7890
+      - NO_PROXY=.example.org,127.0.0.0/8,8.213.133.13
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./xtagi/agents:/xtagi/agents:rw
+      - ./xtagi/workspace:/xtagi/WORKSPACE:rw
+      - ./xtagi/models:/xtagi/model:rw
+    profiles: [ "all", "streamlit" ]
