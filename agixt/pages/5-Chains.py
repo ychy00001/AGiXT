@@ -32,9 +32,11 @@ if st.button("Perform Action"):
         if chain_action == "Create Chain":
             Chain().add_chain(chain_name)
             st.success(f"Chain '{chain_name}' created.")
+            st.experimental_rerun()
         elif chain_action == "Delete Chain":
             Chain().delete_chain(chain_name)
             st.success(f"Chain '{chain_name}' deleted.")
+            st.experimental_rerun()
         elif chain_action == "Run Chain":
             print(f"run chain{chain_name}")
             Chain().run_chain(chain_name)
@@ -141,6 +143,7 @@ if selected_chain_name:
                 modify_prompt,
             )
             st.success(f"Step {step_number} updated in chain '{selected_chain_name}'.")
+            st.experimental_rerun()
             return {
                 "step": modify_step_number,
                 "agent_name": modify_agent_name,
@@ -260,6 +263,7 @@ if selected_chain_name:
                 st.success(
                     f"Step {step_number} added to chain '{selected_chain_name}'."
                 )
+                st.experimental_rerun()
             elif step_action == "Update Step":
                 if prompt_type == "Command":
                     prompt_data = {"command_name": command_name}
@@ -290,11 +294,13 @@ if selected_chain_name:
                 st.success(
                     f"Step {step_number} updated in chain '{selected_chain_name}'."
                 )
+                st.experimental_rerun()
             elif step_action == "Delete Step":
                 Chain().delete_step(selected_chain_name, step_number)
                 st.success(
                     f"Step {step_number} deleted from chain '{selected_chain_name}'."
                 )
+                st.experimental_rerun()
         else:
             st.error("All fields are required.")
 else:

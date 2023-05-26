@@ -1,4 +1,5 @@
 import re
+import os
 import asyncio
 import regex
 import json
@@ -7,9 +8,11 @@ import spacy
 from datetime import datetime
 from Agent import Agent
 from CustomPrompt import CustomPrompt
-from duckduckgo_search import ddg
+from duckduckgo_search import DDGS
 from urllib.parse import urlparse
 from log import logger
+
+ddgs = DDGS()
 
 
 class AGiXT:
@@ -47,20 +50,31 @@ class AGiXT:
         result = re.sub(pattern, replace, string)
         return result
 
+    def get_step_response(self, chain_name, step_number):
+        try:
+            with open(os.path.join("chains", f"{chain_name}_responses.json"), "r") as f:
+                responses = json.load(f)
+            return responses.get(str(step_number))
+        except:
+            return ""
+
     def format_prompt(
-            self,
-            task: str,
-            top_results: int = 5,
-            prompt="",
-            **kwargs,
+        self,
+        task: str = "",
+        top_results: int = 5,
+        prompt="",
+        chain_name="",
+        step_number=0,
+        **kwargs,
     ):
-        # print(f"format_prompt: teak:{task} === prompt: {prompt}")
         cp = CustomPrompt()
         if prompt == "":
             prompt = task
         else:
-            prompt = cp.get_prompt(prompt_name=prompt, model=self.agent.AI_MODEL)
-        # print(f"top_results:{top_results}")
+            try:
+                prompt = cp.get_prompt(prompt_name=prompt, model=self.agent.AI_MODEL)
+            except:
+                prompt = prompt
         if top_results == 0:
             context = "None"
         else:
@@ -68,7 +82,6 @@ class AGiXT:
                 context = self.agent.memories.context_agent(
                     query=task, top_results_num=top_results
                 )
-                # print(f"构建prompt-memories: {context}")
             except:
                 context = "None."
         command_list = self.agent.get_commands_string()
@@ -82,9 +95,19 @@ class AGiXT:
             date=datetime.now().strftime("%B %d, %Y %I:%M %p"),
             **kwargs,
         )
+        if "{STEP" in formatted_prompt:
+            # get the response from the step number
+            step_response = self.get_step_response(
+                chain_name=chain_name, step_number=step_number
+            )
+            # replace the {STEPx} with the response
+            formatted_prompt = formatted_prompt.replace(
+                f"{{STEP{step_number}}}", step_response
+            )
         if not self.nlp:
             self.load_spacy_model()
         tokens = len(self.nlp(formatted_prompt))
+        print(f"FORMATTED PROMPT: {formatted_prompt}")
         return formatted_prompt, prompt, tokens
 
     def run(
@@ -96,8 +119,11 @@ class AGiXT:
         websearch_depth: int = 3,
         async_exec: bool = False,
         learn_file: str = "",
+        chain_name: str = "",
+        step_number: int = 0,
         **kwargs,
     ):
+        print(f"KWARGS: {kwargs}")
         if learn_file != "":
             learning_file = self.agent.memories.read_file(file_path=learn_file)
             if learning_file == False:
@@ -106,6 +132,8 @@ class AGiXT:
             task=task,
             top_results=context_results,
             prompt=prompt,
+            chain_name=chain_name,
+            step_number=step_number,
             **kwargs,
         )
         if websearch:
@@ -251,12 +279,12 @@ class AGiXT:
         return clean_response_agent
 
     def smart_chat(
-            self,
-            task: str = "Write a tweet about AI.",
-            shots: int = 3,
-            async_exec: bool = False,
-            learn_file: str = "",
-            **kwargs,
+        self,
+        task: str = "Write a tweet about AI.",
+        shots: int = 3,
+        async_exec: bool = False,
+        learn_file: str = "",
+        **kwargs,
     ):
         answers = []
         answers.append(
@@ -336,13 +364,13 @@ class AGiXT:
             )
 
     def revalidation_agent(
-            self,
-            task,
-            command_name,
-            command_args,
-            command_output,
-            context_results,
-            **kwargs,
+        self,
+        task,
+        command_name,
+        command_args,
+        command_output,
+        context_results,
+        **kwargs,
     ):
         print(
             f"Command {command_name} did not execute as expected with args {command_args}. Trying again.."
@@ -423,7 +451,7 @@ class AGiXT:
             return "\nNo commands were executed.\n"
 
     async def websearch_agent(
-            self, task: str = "What are the latest breakthroughs in AI?", depth: int = 3
+        self, task: str = "What are the latest breakthroughs in AI?", depth: int = 3
     ):
         async def resursive_browsing(task, links):
             try:
@@ -442,7 +470,7 @@ class AGiXT:
                     url = re.sub(r"^.*?(http)", r"http", url)
                     # Check if url is an actual url
                     if url.startswith("http"):
-                        logger.info(f"===Scraping: {url}")
+                        print(f"Scraping: {url}")
                         if url not in self.browsed_links:
                             self.browsed_links.append(url)
                             (
@@ -468,6 +496,14 @@ class AGiXT:
         results = results.split("\n")
         for result in results:
             search_string = result.lstrip("0123456789. ")
-            links = ddg(search_string, max_results=depth)
+            try:
+                links = ddgs.text(search_string)
+                if len(links) > depth:
+                    links = links[:depth]
+            except:
+                print(
+                    "Duck Duck Go Search module broke. You may need to try to do `pip install duckduckgo_search --upgrade` to fix this."
+                )
+                links = None
             if links is not None:
                 await resursive_browsing(task, links)

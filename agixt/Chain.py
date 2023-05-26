@@ -85,7 +85,7 @@ class Chain:
             if "prompt" in step_data and "step" in step_data:
                 print(f"Running step {step_data['step']}")
                 step_response = self.run_chain_step(
-                    step_data
+                    step_data, chain_name
                 )  # Get the response of the current step.
                 responses[step_data["step"]] = step_response  # Store the response.
         # Write the responses to the json file.
@@ -119,7 +119,8 @@ class Chain:
             )
         return prompt_content
 
-    def run_chain_step(self, step):
+    def run_chain_step(self, step, chain_name):
+        print(step)
         if step:
             if "prompt_type" in step:
                 prompt_type = step["prompt_type"]
@@ -128,7 +129,6 @@ class Chain:
                 step_number = step["step"]
                 try:
                     command_name = prompt["command_name"]
-                    prompt = {k: v for k, v in prompt.items() if k != "command_name"}
                 except:
                     command_name = ""
                 if prompt_type == "Command":
@@ -141,13 +141,9 @@ class Chain:
                         command_name, commands_args
                     )
                 try:
-                    prompt_name = prompt["prompt_name"]
-                    prompt = {
-                        k: v
-                        for k, v in prompt.items()
-                        if k != "prompt_name" and k != "task"
-                    }
-                    prompt_content = CustomPrompt().get_prompt(prompt_name)
+                    prompt_content = CustomPrompt().get_prompt(
+                        prompt_name=prompt["prompt_name"]
+                    )
                     prompt_content = self.get_step_content(
                         chain_name, step_number, prompt_content
                     )
@@ -156,7 +152,10 @@ class Chain:
                     return None
                 if prompt_type == "Prompt":
                     result = agent.run(
-                        task=prompt_content, prompt=prompt_name, **prompt
+                        prompt=prompt["prompt_name"],
+                        chain_name=chain_name,
+                        step_number=step_number,
+                        **prompt,
                     )
                 elif prompt_type == "Chain":
                     result = self.run_chain(prompt["chain_name"])
