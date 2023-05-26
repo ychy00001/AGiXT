@@ -29,7 +29,6 @@ class CongrongProvider:
         self.AI_TRUNCATE = AI_TRUNCATE
 
     def instruct(self, prompt, tokens: int = 0):
-        logger.info("congrong process prompt")
         params = {
             "inputs": prompt,
             "parameters": {
@@ -43,7 +42,7 @@ class CongrongProvider:
             }
         }
         headers = {'Content-type': 'application/json', 'Accept': 'text/plain'}
-        logger.info(f"params:{json.dumps(params)}")
+        print(f"params:{json.dumps(params, ensure_ascii=False)}")
         response = requests.post(
             self.AI_PROVIDER_URI,
             json=params,

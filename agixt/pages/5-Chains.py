@@ -36,6 +36,7 @@ if st.button("Perform Action"):
             Chain().delete_chain(chain_name)
             st.success(f"Chain '{chain_name}' deleted.")
         elif chain_action == "Run Chain":
+            print(f"run chain{chain_name}")
             Chain().run_chain(chain_name)
             st.success(f"Chain '{chain_name}' executed.")
     else:

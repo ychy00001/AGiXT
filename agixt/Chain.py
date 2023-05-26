@@ -10,6 +10,7 @@ class Chain:
     def get_chain(self, chain_name):
         with open(os.path.join("chains", f"{chain_name}.json"), "r") as f:
             chain_data = json.load(f)
+            print(f"chain_data: {chain_data}")
         return chain_data
 
     def get_chains(self):
@@ -76,6 +77,7 @@ class Chain:
         return chain_data["steps"]
 
     def run_chain(self, chain_name):
+        print(f"Prepare run chain：{chain_name}")
         chain_data = self.get_chain(chain_name)
         print(f"Running chain '{chain_name}'")
         responses = {}  # Create a dictionary to hold responses.

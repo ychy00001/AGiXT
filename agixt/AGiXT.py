@@ -11,9 +11,9 @@ from duckduckgo_search import ddg
 from urllib.parse import urlparse
 from log import logger
 
+
 class AGiXT:
     def __init__(self, agent_name: str = "AGiXT"):
-        logger.info(f"构造AGiXT{agent_name}")
         self.agent_name = agent_name
         self.agent = Agent(self.agent_name)
         self.agent_commands = self.agent.get_commands_string()
@@ -48,17 +48,19 @@ class AGiXT:
         return result
 
     def format_prompt(
-        self,
-        task: str,
-        top_results: int = 5,
-        prompt="",
-        **kwargs,
+            self,
+            task: str,
+            top_results: int = 5,
+            prompt="",
+            **kwargs,
     ):
+        # print(f"format_prompt: teak:{task} === prompt: {prompt}")
         cp = CustomPrompt()
         if prompt == "":
             prompt = task
         else:
             prompt = cp.get_prompt(prompt_name=prompt, model=self.agent.AI_MODEL)
+        # print(f"top_results:{top_results}")
         if top_results == 0:
             context = "None"
         else:
@@ -66,6 +68,7 @@ class AGiXT:
                 context = self.agent.memories.context_agent(
                     query=task, top_results_num=top_results
                 )
+                # print(f"构建prompt-memories: {context}")
             except:
                 context = "None."
         command_list = self.agent.get_commands_string()
@@ -105,9 +108,7 @@ class AGiXT:
             prompt=prompt,
             **kwargs,
         )
-        logger.info(f"当前Agent:{self.agent_name}")
         if websearch:
-            logger.info(f"执行WebSearch:{self.agent_name}")
             if async_exec:
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
@@ -117,7 +118,6 @@ class AGiXT:
             else:
                 self.websearch_agent(task=task, depth=websearch_depth)
         try:
-            logger.info(f"调用Agent[{self.agent_name}] instruct")
             self.response = self.agent.instruct(formatted_prompt, tokens=tokens)
         except Exception as e:
             print(f"Error: {e}")
@@ -251,12 +251,12 @@ class AGiXT:
         return clean_response_agent
 
     def smart_chat(
-        self,
-        task: str = "Write a tweet about AI.",
-        shots: int = 3,
-        async_exec: bool = False,
-        learn_file: str = "",
-        **kwargs,
+            self,
+            task: str = "Write a tweet about AI.",
+            shots: int = 3,
+            async_exec: bool = False,
+            learn_file: str = "",
+            **kwargs,
     ):
         answers = []
         answers.append(
@@ -336,13 +336,13 @@ class AGiXT:
             )
 
     def revalidation_agent(
-        self,
-        task,
-        command_name,
-        command_args,
-        command_output,
-        context_results,
-        **kwargs,
+            self,
+            task,
+            command_name,
+            command_args,
+            command_output,
+            context_results,
+            **kwargs,
     ):
         print(
             f"Command {command_name} did not execute as expected with args {command_args}. Trying again.."
@@ -423,7 +423,7 @@ class AGiXT:
             return "\nNo commands were executed.\n"
 
     async def websearch_agent(
-        self, task: str = "What are the latest breakthroughs in AI?", depth: int = 3
+            self, task: str = "What are the latest breakthroughs in AI?", depth: int = 3
     ):
         async def resursive_browsing(task, links):
             try:
@@ -442,7 +442,7 @@ class AGiXT:
                     url = re.sub(r"^.*?(http)", r"http", url)
                     # Check if url is an actual url
                     if url.startswith("http"):
-                        print(f"Scraping: {url}")
+                        logger.info(f"===Scraping: {url}")
                         if url not in self.browsed_links:
                             self.browsed_links.append(url)
                             (

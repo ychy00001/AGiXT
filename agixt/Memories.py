@@ -46,8 +46,11 @@ class Memories:
             raise RuntimeError(f"Unable to initialize chroma client: {e}")
 
     def get_or_create_collection(self):
+        # print(f"get_or_create_collection")
         if not self.chroma_client:
+            # print(f"initialize_chroma_client")
             self.chroma_client = self.initialize_chroma_client()
+        # print(f"agent-config: {agent_config}")
         embedder = Embedding(self.agent_config)
         self.embedding_function = embedder.embed
         self.chunk_size = embedder.chunk_size
@@ -69,11 +72,13 @@ class Memories:
             self.chroma_client = self.initialize_chroma_client()
             self.collection = self.get_or_create_collection()
         try:
+            print(f"准备存储")
             self.collection.add(
                 ids=id,
                 documents=content,
                 metadatas=metadatas,
             )
+            print(f"存储Memory： ids:{id}   documents: {content}")
         except Exception as e:
             print(f"Failed to store memory: {e}")
 
@@ -163,6 +168,7 @@ class Memories:
         if not self.nlp:
             self.load_spacy_model()
         doc = self.nlp(content)
+        print(f"chunk_content doc: {doc}")
         sentences = list(doc.sents)
         content_chunks = []
         chunk = []
@@ -176,7 +182,7 @@ class Memories:
                 content_chunks.append(
                     (self.score_chunk(chunk_text, keywords), chunk_text)
                 )
-                chunk = list(sentences[i - overlap : i]) if i - overlap >= 0 else []
+                chunk = list(sentences[i - overlap: i]) if i - overlap >= 0 else []
                 chunk_len = sum(len(s) for s in chunk)
             chunk.extend(sentence)
             chunk_len += sentence_tokens
@@ -207,8 +213,10 @@ class Memories:
                 with open(file_path, "r") as f:
                     content = f.read()
             self.store_result(task_name=file_path, result=content)
+            print("Memories存储成功")
             return True
         except:
+            print("Memories存储失败")
             return False
 
     async def read_website(self, url):
@@ -232,6 +240,7 @@ class Memories:
                 soup = BeautifulSoup(content, "html.parser")
                 text_content = soup.get_text()
                 text_content = " ".join(text_content.split())
+                logger.info(f"read_website:{text_content}")
                 if text_content:
                     self.store_result(url, text_content)
                 return text_content, link_list
