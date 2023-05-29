@@ -11,7 +11,7 @@ import docx2txt
 import pdfplumber
 from playwright.async_api import async_playwright
 from bs4 import BeautifulSoup
-from log import logger
+import logging
 
 
 class Memories:
@@ -47,21 +47,17 @@ class Memories:
             raise RuntimeError(f"Unable to initialize chroma client: {e}")
 
     def get_or_create_collection(self):
-        print(f"get_or_create_collection : {self.agent_name}  dir:  {self.chroma_persist_dir}")
         if not self.chroma_client:
-            # print(f"initialize_chroma_client")
             self.chroma_client = self.initialize_chroma_client()
-        # print(f"agent-config: {json.dumps(agent_config, ensure_ascii=False)}")
         embedder = Embedding(self.agent_config)
         self.embedding_function = embedder.embed
         self.chunk_size = embedder.chunk_size
         try:
-            print(f"!!!try get collection!!!")
             return self.chroma_client.get_collection(
                 name="memories", embedding_function=self.embedding_function
             )
         except ValueError:
-            print(f"Memories for {self.agent_name} do not exist. Creating...")
+            logging.info(f"Memories for {self.agent_name} do not exist. Creating...")
             return self.chroma_client.create_collection(
                 name="memories", embedding_function=self.embedding_function
             )
@@ -74,15 +70,13 @@ class Memories:
             self.chroma_client = self.initialize_chroma_client()
             self.collection = self.get_or_create_collection()
         try:
-            print(f"准备存储Memory ids:{id}   documents: {content}")
             self.collection.add(
                 ids=id,
                 documents=content,
                 metadatas=metadatas,
             )
-            print(f"完成存储Memory： ids:{id}   documents: {content}")
         except Exception as e:
-            print(f"Failed to store memory: {e}")
+            logging.info(f"Failed to store memory: {e}")
 
     def store_result(self, task_name: str, result: str):
         if not self.chroma_client:
@@ -95,7 +89,6 @@ class Memories:
             chunks = self.chunk_content(result, task_name)
             for chunk in chunks:
                 result_id = self.generate_id(chunk, timestamp.isoformat())
-                # print(f"store_memory: context: {chunk}")
                 self.store_memory(
                     result_id,
                     chunk,
@@ -107,14 +100,10 @@ class Memories:
                 )
 
     def context_agent(self, query: str, top_results_num: int) -> List[str]:
-        print(f"Memory query: {query}, limit: {top_results_num}")
         if not self.chroma_client:
             self.chroma_client = self.initialize_chroma_client()
             self.collection = self.get_or_create_collection()
         count = self.collection.count()
-        collection_list = self.collection.peek()
-        print(f"Memory collection count: {count}")
-        # print(f"Memory collection list: {collection_list}")
         if count == 0:
             return []
         results = self.collection.query(
@@ -136,7 +125,7 @@ class Memories:
         # Need to research to find out how to do this locally instead of sending more shots to the AI.
         context = [item["result"] for item in sorted_results]
         trimmed_context = self.trim_context(context)
-        print(f"CONTEXT: {trimmed_context}")
+        logging.info(f"CONTEXT: {trimmed_context}")
         context_str = "\n".join(trimmed_context)
         response = f"Context: {context_str}\n\n"
         return response
@@ -175,7 +164,6 @@ class Memories:
         if not self.nlp:
             self.load_spacy_model()
         doc = self.nlp(content)
-        print(f"chunk_content doc: {doc}")
         sentences = list(doc.sents)
         content_chunks = []
         chunk = []
@@ -189,7 +177,7 @@ class Memories:
                 content_chunks.append(
                     (self.score_chunk(chunk_text, keywords), chunk_text)
                 )
-                chunk = list(sentences[i - overlap: i]) if i - overlap >= 0 else []
+                chunk = list(sentences[i - overlap : i]) if i - overlap >= 0 else []
                 chunk_len = sum(len(s) for s in chunk)
             chunk.extend(sentence)
             chunk_len += sentence_tokens
@@ -202,7 +190,7 @@ class Memories:
         content_chunks.sort(key=lambda x: x[0], reverse=True)
         return [chunk_text for score, chunk_text in content_chunks]
 
-    def read_file(self, file_path: str):
+    def mem_read_file(self, file_path: str):
         try:
             # If file extension is pdf, convert to text
             if file_path.endswith(".pdf"):
@@ -220,10 +208,8 @@ class Memories:
                 with open(file_path, "r") as f:
                     content = f.read()
             self.store_result(task_name=file_path, result=content)
-            print("Memories存储成功")
             return True
         except:
-            print("Memories存储失败")
             return False
 
     async def read_website(self, url):
