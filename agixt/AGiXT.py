@@ -79,9 +79,11 @@ class AGiXT:
             context = "None"
         else:
             try:
+                print(f"==Try agent memories context!!")
                 context = self.agent.memories.context_agent(
                     query=task, top_results_num=top_results
                 )
+                print(f"==Agent memories context: {context}")
             except:
                 context = "None."
         command_list = self.agent.get_commands_string()
@@ -128,6 +130,7 @@ class AGiXT:
             learning_file = self.agent.memories.read_file(file_path=learn_file)
             if learning_file == False:
                 return "Failed to read file."
+        print(f"==Prepare format_prompt!!")
         formatted_prompt, unformatted_prompt, tokens = self.format_prompt(
             task=task,
             top_results=context_results,

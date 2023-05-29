@@ -123,7 +123,9 @@ class Embedding:
         # We also need to return the correct chunk size
         self.AGENT_CONFIG = AGENT_CONFIG
         try:
+            print("aaa")
             embedder = self.AGENT_CONFIG["settings"]["embedder"]
+            print(f"use embedder:{embedder}")
             self.embed, self.chunk_size = self.__getattribute__(embedder)()
         except:
             self.embed, self.chunk_size = self.default()

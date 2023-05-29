@@ -2,6 +2,7 @@ import streamlit as st
 import os
 from auth_libs.Users import check_auth_status
 from components.agent_selector import agent_selector
+import asyncio
 
 check_auth_status()
 
@@ -31,7 +32,7 @@ if agent_name:
     learn_url = st.text_input("Enter a URL for the agent to learn from..")
     if st.button("Learn from URL"):
         if learn_url:
-            _, _ = agent.memories.read_website(learn_url)
+            context, link_url = agent.memories.read_website(learn_url)
             st.success(f"Agent '{agent_name}' has learned from the URL.")
     st.markdown("## Wipe Agent Memory")
     st.markdown(

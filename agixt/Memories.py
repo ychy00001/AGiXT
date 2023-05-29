@@ -11,6 +11,7 @@ import docx2txt
 import pdfplumber
 from playwright.async_api import async_playwright
 from bs4 import BeautifulSoup
+from log import logger
 
 
 class Memories:
@@ -46,15 +47,16 @@ class Memories:
             raise RuntimeError(f"Unable to initialize chroma client: {e}")
 
     def get_or_create_collection(self):
-        # print(f"get_or_create_collection")
+        print(f"get_or_create_collection : {self.agent_name}  dir:  {self.chroma_persist_dir}")
         if not self.chroma_client:
             # print(f"initialize_chroma_client")
             self.chroma_client = self.initialize_chroma_client()
-        # print(f"agent-config: {agent_config}")
+        # print(f"agent-config: {json.dumps(agent_config, ensure_ascii=False)}")
         embedder = Embedding(self.agent_config)
         self.embedding_function = embedder.embed
         self.chunk_size = embedder.chunk_size
         try:
+            print(f"!!!try get collection!!!")
             return self.chroma_client.get_collection(
                 name="memories", embedding_function=self.embedding_function
             )
@@ -72,13 +74,13 @@ class Memories:
             self.chroma_client = self.initialize_chroma_client()
             self.collection = self.get_or_create_collection()
         try:
-            print(f"准备存储")
+            print(f"准备存储Memory ids:{id}   documents: {content}")
             self.collection.add(
                 ids=id,
                 documents=content,
                 metadatas=metadatas,
             )
-            print(f"存储Memory： ids:{id}   documents: {content}")
+            print(f"完成存储Memory： ids:{id}   documents: {content}")
         except Exception as e:
             print(f"Failed to store memory: {e}")
 
@@ -93,6 +95,7 @@ class Memories:
             chunks = self.chunk_content(result, task_name)
             for chunk in chunks:
                 result_id = self.generate_id(chunk, timestamp.isoformat())
+                # print(f"store_memory: context: {chunk}")
                 self.store_memory(
                     result_id,
                     chunk,
@@ -104,10 +107,14 @@ class Memories:
                 )
 
     def context_agent(self, query: str, top_results_num: int) -> List[str]:
+        print(f"Memory query: {query}, limit: {top_results_num}")
         if not self.chroma_client:
             self.chroma_client = self.initialize_chroma_client()
             self.collection = self.get_or_create_collection()
         count = self.collection.count()
+        collection_list = self.collection.peek()
+        print(f"Memory collection count: {count}")
+        # print(f"Memory collection list: {collection_list}")
         if count == 0:
             return []
         results = self.collection.query(
@@ -240,7 +247,6 @@ class Memories:
                 soup = BeautifulSoup(content, "html.parser")
                 text_content = soup.get_text()
                 text_content = " ".join(text_content.split())
-                logger.info(f"read_website:{text_content}")
                 if text_content:
                     self.store_result(url, text_content)
                 return text_content, link_list

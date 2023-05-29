@@ -29,6 +29,7 @@ class CongrongProvider:
         self.AI_TRUNCATE = AI_TRUNCATE
 
     def instruct(self, prompt, tokens: int = 0):
+        print(f"congrong instruct")
         params = {
             "inputs": prompt,
             "parameters": {

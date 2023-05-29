@@ -60,6 +60,7 @@ if agent_name:
 
     if send_button:
         if agent_name and chat_prompt:
+            print(f"准备调用agent:{agent_name}处理")
             with spinner("Thinking, please wait..."):
                 agent = AGiXT(agent_name)
                 if smart_chat_toggle:
