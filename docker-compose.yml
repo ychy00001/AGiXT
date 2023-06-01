@@ -1,7 +1,7 @@
 version: "3.8"
 services:
   agixt:
-    image: joshxt/agixt:${AGIXT_VERSION:-main}
+    image: joshxt/agixt:main
     entrypoint: [ "poetry", "run", "streamlit", "run", "Main.py" ]
     init: true
     environment:
@@ -12,6 +12,6 @@ services:
     ports:
       - "8501:8501"
     volumes:
-      - ./agixt/agixt/agents:/agixt/agixt/agents:rw
-      - ./agixt/agixt/workspace:/agixt/agix/WORKSPACE:rw
+      - ./agixt/agents:/agixt/agixt/agents:rw
+      - ./agixt/WORKSPACE:/agixt/agix/WORKSPACE:rw
       - ./models:/model:rw
