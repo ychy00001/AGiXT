@@ -1,6 +1,7 @@
 import importlib
 import os
 import glob
+import json
 from inspect import signature, Parameter
 import logging
 
@@ -134,33 +135,23 @@ class Extensions:
 
     def execute_command(self, command_name: str, command_args: dict = None):
         command_function, module, params = self.find_command(command_name=command_name)
+        logging.info(
+            f"Executing command: {command_name} with args: {command_args}. Command Function: {command_function}"
+        )
         if command_function is None:
-            logging.info("|")
-            logging.info(
-                "Command Name: "
-                + str(command_name)
-                + " Args: "
-                + str(command_args)
-                + " Command Function: "
-                + str(command_function)
-            )
-            logging.info("|")
+            logging.error(f"Command {command_name} not found")
             return False
-
-        if command_args is None:
-            command_args = {}
-
-        if not isinstance(command_args, dict):
-            return f"Error: command_args should be a dictionary, but got {type(command_args).__name__}"
-
-        for name, value in command_args.items():
-            if name in params:
-                params[name] = value
-
+        for param in params:
+            if param not in command_args:
+                if param != "self" and param != "kwargs":
+                    command_args[param] = None
+        args = command_args.copy()
+        for param in command_args:
+            if param not in params:
+                del args[param]
         try:
-            command_class = module()
-            output = getattr(command_class, command_function.__name__)(**params)
+            output = getattr(module(), command_function.__name__)(**args)
         except Exception as e:
             output = f"Error: {str(e)}"
-
+        logging.info(f"Command Output: {output}")
         return output

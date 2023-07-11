@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "AGiXT"
-version = "v1.1.74-beta"
+version = "v1.1.76-beta"
 description = "An Artificial Intelligence Automation Platform. AI Instruction management from various providers, has an adaptive memory, and a versatile plugin system with many commands including web browsing. Supports many AI providers and models and growing support every day."
 homepage = "https://AGiXT.com"
 documentation = "https://AGiXT.com"
@@ -75,6 +75,7 @@ protobuf = "3.20.*"
 tweepy = "^4.14.0"
 uvicorn = "^0.22.0"
 webdriver_manager = "^3.8.6"
+semantic-kernel = "0.2.9.dev0"
 
 
 ## see https://pytorch.org/get-started/locally/ for weird torch combinations
@@ -87,6 +88,7 @@ transformers = { version = "^4.29.2", extras = ["accelerate"] }
 sentence-transformers = "^2.2.2"
 llama-cpp-python = "^0.1.55"
 nomic = "^1.1.6"
+semantic-kernel = "^0.2.9.dev0"
 
 [tool.poetry.group.gpt4free]
 optional = true
