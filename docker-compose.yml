@@ -1,17 +1,32 @@
 version: "3.8"
 services:
   agixt:
-    image: joshxt/agixt:main
-    entrypoint: [ "poetry", "run", "streamlit", "run", "Main.py" ]
+    image: joshxt/agixt:latest
     init: true
     environment:
+      - DB_CONNECTED=false
+      - UVICORN_WORKERS=${UVICORN_WORKERS:-4}
+      - AGIXT_HUB=${AGIXT_HUB:-AGiXT/light-hub}
+      - GITHUB_USER=${GITHUB_USER}
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - TOKENIZERS_PARALLELISM=False
+    ports:
+      - "7437:7437"
+    volumes:
       - HTTP_PROXY=http://host.docker.internal:7890
       - HTTPS_PROXY=http://host.docker.internal:7890
       - ALL_PROXY=socks5://host.docker.internal:7890
       - NO_PROXY=.example.org,127.0.0.0/8,8.213.133.13,host.docker.internal
+      - ./models:/model
+      - ./agents:/agixt/agents
+      - ./chains:/agixt/chains
+      - ./prompts:/agixt/prompts
+  streamlit:
+    image: joshxt/streamlit:latest
+    depends_on:
+      - agixt
+    environment:
+      - AGIXT_HUB=${AGIXT_HUB:-AGiXT/light-hub}
+      - AGIXT_URI=${AGIXT_URI:-http://agixt:7437}
     ports:
       - "8501:8501"
-    volumes:
-      - ./agixt/agents:/agixt/agixt/agents:rw
-      - ./agixt/WORKSPACE:/agixt/agix/WORKSPACE:rw
-      - ./models:/model:rw

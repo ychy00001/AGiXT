@@ -1,8 +1,8 @@
-from .AGiXT import AGiXT
-from .Memories import Memories
-from .Chain import Chain
-from .Extensions import Extensions
-from .Agent import Agent
-from .Config import Config
-from .Embedding import Embedding
-from .Prompts import Prompts
+from agixtsdk import AGiXTSDK
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+ApiClient = AGiXTSDK(
+    base_uri="http://localhost:7437", api_key=os.getenv("AGIXT_API_KEY")
+)

@@ -20,20 +20,32 @@ agents/*
 frontend/
 Agent-LLM-Frontend/
 *.code-workspace
-
+src/
 # probably mounted data
 agixt/agents/*
 agixt/data/*
 agixt/WORKSPACE/*
 agixt/models/*
-
+agixt/extensions
+agixt/chains
+agixt/providers
+agixt/conversations
+agixt/.github
+agixt/prompts
+agixt/agents
+agixt/LICENSE
+agixt/README.md
+agixt/hub_main.zip
+agixt/*_main.zip
 # docs generation
 _book/
-
+streamlit/
 # 3rd party
 package.json
 package-lock.json
 *cookies.json
-
+chains/
+prompts/
+agents/
 # testing
 **/.ipynb_checkpoints/

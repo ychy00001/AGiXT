@@ -1,4 +1,43 @@
 services:
-  agixt:
+  db:
+    image: postgres
+    ports:
+      - ${POSTGRES_PORT:-5432}:5432
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
     volumes:
-      - ./agixt:/agixt/agixt
+      - ./data:/var/lib/postgresql/data
+  agixt:
+    build: .
+    depends_on:
+      - db
+    environment:
+      - DB_CONNECTED=false
+      - POSTGRES_SERVER=${POSTGRES_SERVER:-db}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB=${POSTGRES_DB:-postgres}
+      - POSTGRES_PORT=${POSTGRES_PORT:-5432}
+      - UVICORN_WORKERS=${UVICORN_WORKERS:-4}
+      - AGIXT_HUB=${AGIXT_HUB:-AGiXT/light-hub}
+      - GITHUB_USER=${GITHUB_USER}
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - TOKENIZERS_PARALLELISM=False
+    ports:
+      - "7437:7437"
+    volumes:
+      - ./models:/model
+      - ./agents:/agixt/agents
+      - ./chains:/agixt/chains
+      - ./prompts:/agixt/prompts
+  streamlit:
+    image: joshxt/streamlit:latest
+    depends_on:
+      - agixt
+    environment:
+      - AGIXT_HUB=${AGIXT_HUB:-AGiXT/light-hub}
+      - AGIXT_URI=${AGIXT_URI:-http://agixt:7437}
+    ports:
+      - "8501:8501"

@@ -8,62 +8,7 @@ from semantic_kernel.connectors.ai.open_ai import (
     OpenAITextEmbedding,
 )
 import logging
-
-
-class GooglePalmEmbeddingFunction(EmbeddingFunction):
-    """To use this EmbeddingFunction, you must have the google.generativeai Python package installed and have a PaLM API key."""
-
-    def __init__(self, api_key: str, model_name: str = "models/embedding-gecko-001"):
-        if not api_key:
-            raise ValueError("Please provide a PaLM API key.")
-
-        if not model_name:
-            raise ValueError("Please provide the model name.")
-
-        try:
-            import google.generativeai as palm
-        except ImportError:
-            raise ValueError(
-                "The Google Generative AI python package is not installed. Please install it with `pip install google-generativeai`"
-            )
-
-        palm.configure(api_key=api_key)
-        self._palm = palm
-        self._model_name = model_name
-
-    def __call__(self, texts: Documents) -> Embeddings:
-        return [
-            self._palm.generate_embeddings(model=self._model_name, text=text)[
-                "embedding"
-            ]
-            for text in texts
-        ]
-
-
-class GoogleVertexEmbeddingFunction(EmbeddingFunction):
-    # Follow API Quickstart for Google Vertex AI
-    # https://cloud.google.com/vertex-ai/docs/generative-ai/start/quickstarts/api-quickstart
-    # Information about the text embedding modules in Google Vertex AI
-    # https://cloud.google.com/vertex-ai/docs/generative-ai/embeddings/get-text-embeddings
-    def __init__(
-        self,
-        api_key: str,
-        model_name: str = "textembedding-gecko-001",
-        project_id: str = "cloud-large-language-models",
-        region: str = "us-central1",
-    ):
-        self._api_url = f"https://{region}-aiplatform.googleapis.com/v1/projects/{project_id}/locations/{region}/endpoints/{model_name}:predict"
-        self._session = requests.Session()
-        self._session.headers.update({"Authorization": f"Bearer {api_key}"})
-
-    def __call__(self, texts: Documents) -> Embeddings:
-        response = self._session.post(
-            self._api_url, json={"instances": [{"content": texts}]}
-        ).json()
-
-        if "predictions" in response:
-            return response["predictions"]
-        return {}
+import spacy
 
 
 class LlamacppEmbeddingFunction(EmbeddingFunction):
@@ -101,14 +46,14 @@ class Embedding:
     async def default(self):
         chunk_size = 128
         embed = HuggingFaceTextEmbedding(
-            model_name="all-mpnet-base-v2", log=logging
+            model_id="all-mpnet-base-v2", log=logging
         ).generate_embeddings_async
         return embed, chunk_size
 
     async def large_local(self):
         chunk_size = 500
         embed = HuggingFaceTextEmbedding(
-            model_name="gtr-t5-large", log=logging
+            model_id="gtr-t5-large", log=logging
         ).generate_embeddings_async
         return embed, chunk_size
 
@@ -124,23 +69,28 @@ class Embedding:
 
     async def openai(self):
         chunk_size = 1000
+        if "API_URI" in self.AGENT_CONFIG["settings"]:
+            api_base = self.AGENT_CONFIG["settings"]["API_URI"]
+        else:
+            api_base = None
         embed = OpenAITextEmbedding(
             model_id="text-embedding-ada-002",
             api_key=self.AGENT_CONFIG["settings"]["OPENAI_API_KEY"],
+            endpoint=api_base,
             log=logging,
         ).generate_embeddings_async
         return embed, chunk_size
 
     async def google_palm(self):
         chunk_size = 1000
-        embed = GooglePalmEmbeddingFunction(
+        embed = embedding_functions.GooglePalmEmbeddingFunction(
             api_key=self.AGENT_CONFIG["settings"]["GOOGLE_API_KEY"],
         )
         return embed, chunk_size
 
     async def google_vertex(self):
         chunk_size = 1000
-        embed = GoogleVertexEmbeddingFunction(
+        embed = embedding_functions.GoogleVertexEmbeddingFunction(
             api_key=self.AGENT_CONFIG["settings"]["GOOGLE_API_KEY"],
             project_id=self.AGENT_CONFIG["settings"]["GOOGLE_PROJECT_ID"],
         )
@@ -167,3 +117,17 @@ def get_embedding_providers():
         for func, _ in inspect.getmembers(Embedding, predicate=inspect.isfunction)
         if not func.startswith("__")
     ]
+
+
+def nlp(text):
+    try:
+        sp = spacy.load("en_core_web_sm")
+    except:
+        spacy.cli.download("en_core_web_sm")
+        sp = spacy.load("en_core_web_sm")
+    sp.max_length = 99999999999999999999999
+    return sp(text)
+
+
+def get_tokens(text):
+    return len(nlp(text))

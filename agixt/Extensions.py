@@ -1,21 +1,28 @@
 import importlib
 import os
 import glob
-import json
 from inspect import signature, Parameter
 import logging
+import inspect
 
 
 class Extensions:
-    def __init__(self, agent_config, load_commands_flag: bool = True, agent_name=""):
+    def __init__(self, agent_config=None, load_commands_flag: bool = True):
         self.agent_config = agent_config
         if load_commands_flag:
             self.commands = self.load_commands()
         else:
             self.commands = []
-        self.available_commands = self.get_available_commands()
+        if agent_config != None:
+            if "commands" not in self.agent_config:
+                self.agent_config["commands"] = {}
+            if self.agent_config["commands"] == None:
+                self.agent_config["commands"] = {}
+            self.available_commands = self.get_available_commands()
 
     def get_available_commands(self):
+        if self.commands == []:
+            return []
         available_commands = []
         for command in self.commands:
             friendly_name, command_module, command_name, command_args = command
@@ -36,15 +43,6 @@ class Extensions:
                             "enabled": True,
                         }
                     )
-                else:
-                    available_commands.append(
-                        {
-                            "friendly_name": friendly_name,
-                            "name": command_name,
-                            "args": command_args,
-                            "enabled": False,
-                        }
-                    )
         return available_commands
 
     def get_enabled_commands(self):
@@ -55,10 +53,12 @@ class Extensions:
         return enabled_commands
 
     def get_command_args(self, command_name: str):
-        for command in self.available_commands:
-            if command["friendly_name"] == command_name:
-                return command["args"]
-        return None
+        extensions = self.get_extensions()
+        for extension in extensions:
+            for command in extension["commands"]:
+                if command["friendly_name"] == command_name:
+                    return command["command_args"]
+        return {}
 
     def load_commands(self):
         try:
@@ -109,18 +109,6 @@ class Extensions:
                     settings[module_name] = params
         return settings
 
-    def get_command_params(self, func):
-        params = {}
-        sig = signature(func)
-        for name, param in sig.parameters.items():
-            if name == "self":
-                continue
-            if param.default == Parameter.empty:
-                params[name] = None
-            else:
-                params[name] = param.default
-        return params
-
     def find_command(self, command_name: str):
         for name, module, function_name, params in self.commands:
             if name == command_name:
@@ -129,11 +117,11 @@ class Extensions:
         return None, None, None  # Updated return statement
 
     def get_commands_list(self):
-        self.commands = self.load_commands(agent_name=self.agent_name)
+        self.commands = self.load_commands()
         commands_list = [command_name for command_name, _, _ in self.commands]
         return commands_list
 
-    def execute_command(self, command_name: str, command_args: dict = None):
+    async def execute_command(self, command_name: str, command_args: dict = None):
         command_function, module, params = self.find_command(command_name=command_name)
         logging.info(
             f"Executing command: {command_name} with args: {command_args}. Command Function: {command_function}"
@@ -150,8 +138,61 @@ class Extensions:
             if param not in params:
                 del args[param]
         try:
-            output = getattr(module(), command_function.__name__)(**args)
+            output = await getattr(module(), command_function.__name__)(**args)
         except Exception as e:
             output = f"Error: {str(e)}"
         logging.info(f"Command Output: {output}")
         return output
+
+    def get_command_params(self, func):
+        params = {}
+        sig = signature(func)
+        for name, param in sig.parameters.items():
+            if name == "self":
+                continue
+            if param.default == Parameter.empty:
+                params[name] = ""
+            else:
+                params[name] = param.default
+        return params
+
+    def get_extensions(self):
+        commands = []
+        command_files = glob.glob("extensions/*.py")
+        for command_file in command_files:
+            module_name = os.path.splitext(os.path.basename(command_file))[0]
+            module = importlib.import_module(f"extensions.{module_name}")
+            command_class = getattr(module, module_name.lower())()
+            extension_name = command_file.split("/")[-1].split(".")[0]
+            extension_name = extension_name.replace("_", " ").title()
+            constructor = inspect.signature(command_class.__init__)
+            params = constructor.parameters
+            extension_settings = [
+                name for name in params if name != "self" and name != "kwargs"
+            ]
+            extension_commands = []
+            if hasattr(command_class, "commands"):
+                try:
+                    for (
+                        command_name,
+                        command_function,
+                    ) in command_class.commands.items():
+                        params = self.get_command_params(command_function)
+                        extension_commands.append(
+                            {
+                                "friendly_name": command_name,
+                                "command_name": command_function.__name__,
+                                "command_args": params,
+                            }
+                        )
+                except Exception as e:
+                    logging.error(f"Error getting commands: {e}")
+            commands.append(
+                {
+                    "extension_name": extension_name,
+                    "description": extension_name,
+                    "settings": extension_settings,
+                    "commands": extension_commands,
+                }
+            )
+        return commands
