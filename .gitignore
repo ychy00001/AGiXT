@@ -37,6 +37,18 @@ agixt/LICENSE
 agixt/README.md
 agixt/hub_main.zip
 agixt/*_main.zip
+agents/*
+data/*
+WORKSPACE/*
+models/*
+extensions
+chains
+providers
+conversations
+prompts
+agents
+hub_main.zip
+*_main.zip
 # docs generation
 _book/
 streamlit/
