@@ -33,11 +33,11 @@ services:
     ports:
       - "7437:7437"
     volumes:
-      - ./agixt/models:/model
-      - ./agixt/agents:/agixt/agents
-      - ./agixt/chains:/agixt/chains
-      - ./agixt/prompts:/agixt/prompts
-      - ./agixt/WORKSPACE:/agixt/WORKSPACE
+      - ./models:/model
+      - ./agents:/agixt/agents
+      - ./chains:/agixt/chains
+      - ./prompts:/agixt/prompts
+      - ./WORKSPACE:/agixt/WORKSPACE
   streamlit:
     image: joshxt/streamlit:latest
     depends_on:
