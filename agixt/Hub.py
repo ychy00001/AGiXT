@@ -83,7 +83,7 @@ def import_agixt_hub():
                 if os.path.exists(dest_file):
                     for item in os.listdir(dest_file):
                         dest_item = os.path.join(dest_file, item)
-                        if os.path.isfile(dest_item):
+                        if os.path.isfile(dest_item) and "config.json" not in dest_item:
                             os.remove(dest_item)
                 else:
                     os.makedirs(dest_file, exist_ok=True)
@@ -96,11 +96,17 @@ def import_agixt_hub():
                             shutil.rmtree(dest_item)
                         shutil.copytree(src_item, dest_item)
                     else:
-                        shutil.copy2(src_item, dest_item)
+                        if not (
+                            "config.json" not in dest_item and os.path.exists(dest_item)
+                        ):  # Don't overwrite existing config.json
+                            shutil.copy2(src_item, dest_item)
             else:
-                if os.path.exists(dest_file):
-                    os.remove(dest_file)
-                shutil.move(src_file, dest_file)
+                if "config.json" not in dest_file and not os.path.exists(
+                    dest_file
+                ):  # Don't overwrite existing config.json
+                    if os.path.exists(dest_file):
+                        os.remove(dest_file)
+                    shutil.move(src_file, dest_file)
 
         # Remove the reponame-main directory
         shutil.rmtree(f"{repo_name}-main")

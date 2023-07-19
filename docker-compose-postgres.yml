@@ -37,6 +37,7 @@ services:
       - ./agixt/agents:/agixt/agents
       - ./agixt/chains:/agixt/chains
       - ./agixt/prompts:/agixt/prompts
+      - ./agixt/WORKSPACE:/agixt/WORKSPACE
   streamlit:
     image: joshxt/streamlit:latest
     depends_on:

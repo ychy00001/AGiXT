@@ -1,20 +1,27 @@
+import os
 import re
 import json
 import random
 import requests
 import logging
 import asyncio
-import time
-from Embedding import get_tokens
 from urllib.parse import urlparse
 from playwright.async_api import async_playwright
+from Embedding import get_tokens
+from Memories import Memories
 from bs4 import BeautifulSoup
 from agixtsdk import AGiXTSDK
 from typing import List
-import os
 from dotenv import load_dotenv
 
 load_dotenv()
+AGIXT_API_KEY = os.getenv("AGIXT_API_KEY")
+db_connected = True if os.getenv("DB_CONNECTED", "false").lower() == "true" else False
+if db_connected:
+    from db.Agent import Agent
+else:
+    from fb.Agent import Agent
+
 ApiClient = AGiXTSDK(
     base_uri="http://localhost:7437", api_key=os.getenv("AGIXT_API_KEY")
 )
@@ -23,17 +30,26 @@ ApiClient = AGiXTSDK(
 class Websearch:
     def __init__(
         self,
-        agent_name: str,
-        max_tokens: int = 2048,
-        searx_instance_url: str = "",
+        agent: Agent,
+        memories: Memories,
         **kwargs,
     ):
-        self.agent_name = agent_name
-        self.max_tokens = max_tokens
-        self.searx_instance_url = searx_instance_url
+        self.agent = agent
+        self.memories = memories
+        self.agent_name = self.agent.agent_name
+        try:
+            self.max_tokens = self.agent.PROVIDER_SETTINGS["MAX_TOKENS"]
+        except:
+            self.max_tokens = 2048
+        self.searx_instance_url = (
+            self.agent.PROVIDER_SETTINGS["SEARXNG_INSTANCE_URL"]
+            if "SEARXNG_INSTANCE_URL" in self.agent.PROVIDER_SETTINGS
+            else ""
+        )
         self.requirements = ["agixtsdk"]
         self.failures = []
         self.browsed_links = []
+        self.tasks = []
 
     async def get_web_content(self, url):
         try:
@@ -49,6 +65,9 @@ class Websearch:
                 link_list = []
                 for link in links:
                     title = await page.evaluate("(link) => link.textContent", link)
+                    title = title.replace("\n", "")
+                    title = title.replace("\t", "")
+                    title = title.replace("  ", "")
                     href = await page.evaluate("(link) => link.href", link)
                     link_list.append((title, href))
 
@@ -61,7 +80,7 @@ class Websearch:
             return None, None
 
     async def resursive_browsing(self, user_input, links):
-        chunk_size = int(int(self.max_tokens) / 2)
+        chunk_size = int(int(self.max_tokens) / 3)
         try:
             words = links.split()
             links = [
@@ -79,6 +98,8 @@ class Websearch:
                 else:
                     url = link
                 url = re.sub(r"^.*?(http)", r"http", url)
+                if url in self.browsed_links:
+                    continue
                 # Check if url is an actual url
                 if url.startswith("http"):
                     logging.info(f"Scraping: {url}")
@@ -88,7 +109,7 @@ class Websearch:
                             collected_data,
                             link_list,
                         ) = await self.get_web_content(url=url)
-                        # Split the collected data into agent max tokens / 2 character chunks
+                        # Split the collected data into agent max tokens / 3 character chunks
                         if collected_data is not None:
                             if len(collected_data) > 0:
                                 tokens = get_tokens(collected_data)
@@ -107,16 +128,38 @@ class Websearch:
                                         prompt_args={
                                             "link": url,
                                             "chunk": chunk,
-                                            "disable_memory": True,
                                             "user_input": user_input,
+                                            "browse_links": False,
+                                            "disable_memory": True,
                                         },
                                     )
                                     if not summarized_content.startswith("None"):
                                         await self.memories.store_result(
-                                            input=user_input,
+                                            input=url,
                                             result=summarized_content,
                                             external_source_name=url,
                                         )
+        if links is not None:
+            for link in links:
+                if "href" in link:
+                    try:
+                        url = link["href"]
+                    except:
+                        url = link
+                else:
+                    url = link
+                url = re.sub(r"^.*?(http)", r"http", url)
+                if url in self.browsed_links:
+                    continue
+                # Check if url is an actual url
+                if url.startswith("http"):
+                    logging.info(f"Scraping: {url}")
+                    if url not in self.browsed_links:
+                        self.browsed_links.append(url)
+                        (
+                            collected_data,
+                            link_list,
+                        ) = await self.get_web_content(url=url)
                         if link_list is not None:
                             if len(link_list) > 0:
                                 if len(link_list) > 5:
@@ -126,12 +169,19 @@ class Websearch:
                                         agent_name=self.agent_name,
                                         prompt_name="Pick-a-Link",
                                         prompt_args={
+                                            "url": url,
                                             "links": link_list,
+                                            "visited_links": self.browsed_links,
                                             "disable_memory": True,
+                                            "browse_links": False,
                                             "user_input": user_input,
+                                            "context_results": 0,
                                         },
                                     )
                                     if not pick_a_link.startswith("None"):
+                                        logging.info(
+                                            f"AI has decided to click: {pick_a_link}"
+                                        )
                                         await self.resursive_browsing(
                                             user_input=user_input, links=pick_a_link
                                         )
@@ -184,6 +234,7 @@ class Websearch:
         self,
         user_input: str = "What are the latest breakthroughs in AI?",
         depth: int = 3,
+        timeout: int = 0,
     ):
         results = ApiClient.prompt_agent(
             agent_name=self.agent_name,
@@ -204,13 +255,16 @@ class Websearch:
                 if len(links) > depth:
                     links = links[:depth]
                 if links is not None and len(links) > 0:
-                    asyncio.create_task(
+                    task = asyncio.create_task(
                         self.resursive_browsing(user_input=user_input, links=links)
                     )
+                    self.tasks.append(task)
 
-            # Wait for all tasks to complete
-            logging.info("Waiting 30 seconds for websearch tasks to complete...")
-            time.sleep(30)
-            logging.info("Websearch tasks completed.")
+            if int(timeout) == 0:
+                await asyncio.gather(*self.tasks)
+            else:
+                logging.info(f"Web searching for {timeout} seconds... Please wait...")
+                await asyncio.sleep(int(timeout))
+                logging.info("Websearch tasks completed.")
         else:
             logging.info("No results found.")

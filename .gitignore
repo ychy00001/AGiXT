@@ -45,7 +45,9 @@ package.json
 package-lock.json
 *cookies.json
 chains/
+data/
 prompts/
 agents/
+text-generation-webui/
 # testing
 **/.ipynb_checkpoints/

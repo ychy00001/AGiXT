@@ -4,6 +4,7 @@ import regex
 import json
 import time
 import logging
+import asyncio
 from datetime import datetime
 from dotenv import load_dotenv
 
@@ -40,20 +41,7 @@ class Interactions:
             self.agent = Agent(self.agent_name)
             self.agent_commands = self.agent.get_commands_string()
             self.memories = self.agent.get_memories()
-            searx_instance_url = (
-                self.agent.PROVIDER_SETTINGS["SEARXNG_INSTANCE_URL"]
-                if "SEARXNG_INSTANCE_URL" in self.agent.PROVIDER_SETTINGS
-                else ""
-            )
-            try:
-                max_tokens = self.agent.PROVIDER_SETTINGS["MAX_TOKENS"]
-            except:
-                max_tokens = 2048
-            self.websearch = Websearch(
-                agent_name=self.agent_name,
-                searx_instance_url=searx_instance_url,
-                max_tokens=max_tokens,
-            )
+            self.websearch = Websearch(agent=self.agent, memories=self.memories)
         else:
             self.agent_name = ""
             self.agent = None
@@ -86,7 +74,6 @@ class Interactions:
         prompt="",
         chain_name="",
         step_number=0,
-        memories=None,
         **kwargs,
     ):
         if prompt == "":
@@ -99,15 +86,16 @@ class Interactions:
                 )
             except:
                 prompt = prompt
+        logging.info(f"CONTEXT RESULTS: {top_results}")
         if top_results == 0:
-            context = "None"
+            context = ""
         else:
-            try:
-                context = await memories.context_agent(
-                    query=user_input, top_results_num=top_results
-                )
-            except:
-                context = "None."
+            # try:
+            context = await self.memories.context_agent(
+                query=user_input, top_results_num=top_results
+            )
+            # except:
+            # context = ""
         command_list = self.agent.get_commands_string()
         if chain_name != "":
             try:
@@ -167,24 +155,51 @@ class Interactions:
         context_results: int = 5,
         websearch: bool = False,
         websearch_depth: int = 3,
-        learn_file: str = "",
         chain_name: str = "",
         step_number: int = 0,
         shots: int = 1,
         disable_memory: bool = False,
         conversation_name: str = "",
+        browse_links: bool = False,
         **kwargs,
     ):
         shots = int(shots)
+        disable_memory = True if str(disable_memory).lower() != "true" else False
+        browse_links = True if str(browse_links).lower() == "true" else False
         if conversation_name != "":
             conversation_name = f"{self.agent_name} History"
-        if learn_file != "":
+        if "WEBSEARCH_TIMEOUT" in self.agent.PROVIDER_SETTINGS:
             try:
-                learning_file = ApiClient.learn_file(file_path=learn_file)
+                websearch_timeout = int(
+                    self.agent.PROVIDER_SETTINGS["WEBSEARCH_TIMEOUT"]
+                )
             except:
-                return "Failed to read file."
-            if learning_file == False:
-                return "Failed to read file."
+                websearch_timeout = 0
+        else:
+            websearch_timeout = 0
+        if browse_links != False:
+            links = re.findall(r"(?P<url>https?://[^\s]+)", user_input)
+            if links is not None and len(links) > 0:
+                for link in links:
+                    if link not in self.websearch.browsed_links:
+                        logging.info(f"Browsing link: {link}")
+                        self.websearch.browsed_links.append(link)
+                        text_content, link_list = await self.memories.read_website(
+                            url=link
+                        )
+                        if link_list is not None and len(link_list) > 0:
+                            i = 0
+                            for sublink in link_list:
+                                if sublink[1] not in self.websearch.browsed_links:
+                                    logging.info(f"Browsing link: {sublink[1]}")
+                                    if i <= 10:
+                                        (
+                                            text_content,
+                                            link_list,
+                                        ) = await self.memories.read_website(
+                                            url=sublink[1]
+                                        )
+                                        i = i + 1
         if websearch:
             if user_input == "":
                 if "primary_objective" in kwargs and "task" in kwargs:
@@ -195,15 +210,16 @@ class Interactions:
                 search_string = user_input
             if search_string != "":
                 await self.websearch.websearch_agent(
-                    user_input=search_string, depth=websearch_depth
+                    user_input=search_string,
+                    depth=websearch_depth,
+                    timeout=websearch_timeout,
                 )
         formatted_prompt, unformatted_prompt, tokens = await self.format_prompt(
             user_input=user_input,
-            top_results=context_results,
+            top_results=int(context_results),
             prompt=prompt,
             chain_name=chain_name,
             step_number=step_number,
-            memories=self.memories,
             **kwargs,
         )
         try:
@@ -283,7 +299,7 @@ class Interactions:
             self.response = return_response
         logging.info(f"Response: {self.response}")
         if self.response != "" and self.response != None:
-            if disable_memory == False:
+            if disable_memory != True:
                 try:
                     await self.memories.store_result(
                         input=user_input, result=self.response

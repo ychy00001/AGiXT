@@ -9,6 +9,7 @@ from fastapi import FastAPI, HTTPException, Depends, Request, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from Interactions import Interactions
+from Embedding import Embedding
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -162,6 +163,11 @@ class RunChain(BaseModel):
     from_step: Optional[int] = 1
 
 
+class RunChainStep(BaseModel):
+    prompt: str
+    agent_override: Optional[str] = ""
+
+
 class StepInfo(BaseModel):
     step_number: int
     agent_name: str
@@ -194,6 +200,11 @@ class ResponseMessage(BaseModel):
 
 class UrlInput(BaseModel):
     url: str
+
+
+class EmbeddingModel(BaseModel):
+    input: str
+    model: str
 
 
 class FileInput(BaseModel):
@@ -582,6 +593,21 @@ async def chat_completion(prompt: Completions):
     return res_model
 
 
+# Use agent name in the model field to use embedding.
+@app.post("/api/v1/embedding", tags=["Agent"], dependencies=[Depends(verify_api_key)])
+async def embedding(embedding: EmbeddingModel):
+    agent_name = embedding.model
+    agent_config = Agent(agent_name=agent_name).get_agent_config()
+    tokens = get_tokens(embedding.input)
+    embedding = Embedding(AGENT_CONFIG=agent_config).embed_text(embedding.input)
+    return {
+        "data": [{"embedding": embedding, "index": 0, "object": "embedding"}],
+        "model": agent_name,
+        "object": "list",
+        "usage": {"prompt_tokens": tokens, "total_tokens": tokens},
+    }
+
+
 @app.get(
     "/api/agent/{agent_name}/command",
     tags=["Agent"],
@@ -668,6 +694,29 @@ async def run_chain(chain_name: str, user_input: RunChain):
         from_step=user_input.from_step,
     )
     return chain_response
+
+
+@app.post(
+    "/api/chain/{chain_name}/run/step/{step_number}",
+    tags=["Chain"],
+    dependencies=[Depends(verify_api_key)],
+)
+async def run_chain_step(chain_name: str, step_number: str, user_input: RunChainStep):
+    chain = Chain()
+    chain_steps = chain.get_chain(chain_name=chain_name)
+    try:
+        step = chain_steps["step"][step_number]
+    except Exception as e:
+        raise HTTPException(
+            status_code=404, detail=f"Step {step_number} not found. {e}"
+        )
+    chain_step_response = await chain.run_chain_step(
+        step=step,
+        chain_name=chain_name,
+        user_input=user_input.prompt,
+        agent_override=user_input.agent_override,
+    )
+    return chain_step_response
 
 
 @app.post("/api/chain", tags=["Chain"], dependencies=[Depends(verify_api_key)])
@@ -805,6 +854,20 @@ async def delete_prompt(prompt_name: str) -> ResponseMessage:
     try:
         Prompts().delete_prompt(prompt_name=prompt_name)
         return ResponseMessage(message=f"Prompt '{prompt_name}' deleted.")
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+# Rename prompt
+@app.patch(
+    "/api/prompt/{prompt_name}", tags=["Prompt"], dependencies=[Depends(verify_api_key)]
+)
+async def rename_prompt(prompt_name: str, new_name: PromptName) -> ResponseMessage:
+    try:
+        Prompts().rename_prompt(prompt_name=prompt_name, new_name=new_name.prompt_name)
+        return ResponseMessage(
+            message=f"Prompt '{prompt_name}' renamed to '{new_name.prompt_name}'."
+        )
     except Exception as e:
         raise HTTPException(status_code=404, detail=str(e))
 
