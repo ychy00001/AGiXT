@@ -26,13 +26,17 @@ services:
       - GITHUB_USER=${GITHUB_USER}
       - GITHUB_TOKEN=${GITHUB_TOKEN}
       - TOKENIZERS_PARALLELISM=False
+      - HTTP_PROXY=http://host.docker.internal:7890
+      - HTTPS_PROXY=http://host.docker.internal:7890
+      - ALL_PROXY=socks5://host.docker.internal:7890
+      - NO_PROXY=.example.org,127.0.0.0/8,8.213.133.13,host.docker.internal
     ports:
       - "7437:7437"
     volumes:
-      - ./models:/model
-      - ./agents:/agixt/agents
-      - ./chains:/agixt/chains
-      - ./prompts:/agixt/prompts
+      - ./agixt/models:/model
+      - ./agixt/agents:/agixt/agents
+      - ./agixt/chains:/agixt/chains
+      - ./agixt/prompts:/agixt/prompts
   streamlit:
     image: joshxt/streamlit:latest
     depends_on:
