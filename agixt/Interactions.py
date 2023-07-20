@@ -76,6 +76,7 @@ class Interactions:
         step_number=0,
         **kwargs,
     ):
+        logging.info(f"BEGIN FORMATTED PROMPT USER INPUT: {user_input}")
         if prompt == "":
             prompt = user_input
         else:
@@ -163,6 +164,7 @@ class Interactions:
         browse_links: bool = False,
         **kwargs,
     ):
+        logging.info(f"BEGIN RUN")
         shots = int(shots)
         disable_memory = True if str(disable_memory).lower() != "true" else False
         browse_links = True if str(browse_links).lower() == "true" else False
@@ -177,7 +179,9 @@ class Interactions:
                 websearch_timeout = 0
         else:
             websearch_timeout = 0
+        logging.info(f"RECREATE VARIABLE")
         if browse_links != False:
+            logging.info(f"BEGIN BROWSE_LINKS")
             links = re.findall(r"(?P<url>https?://[^\s]+)", user_input)
             if links is not None and len(links) > 0:
                 for link in links:
@@ -200,7 +204,9 @@ class Interactions:
                                             url=sublink[1]
                                         )
                                         i = i + 1
+            logging.info(f"END BROWSE_LINKS")
         if websearch:
+            logging.info(f"BEGIN WBE_SEARCH")
             if user_input == "":
                 if "primary_objective" in kwargs and "task" in kwargs:
                     search_string = f"Primary Objective: {kwargs['primary_objective']}\n\nTask: {kwargs['task']}"
@@ -214,6 +220,7 @@ class Interactions:
                     depth=websearch_depth,
                     timeout=websearch_timeout,
                 )
+            logging.info(f"END WBE_SEARCH")
         formatted_prompt, unformatted_prompt, tokens = await self.format_prompt(
             user_input=user_input,
             top_results=int(context_results),

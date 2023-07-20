@@ -29,7 +29,7 @@ services:
       - HTTP_PROXY=http://host.docker.internal:7890
       - HTTPS_PROXY=http://host.docker.internal:7890
       - ALL_PROXY=socks5://host.docker.internal:7890
-      - NO_PROXY=.example.org,127.0.0.0/8,8.213.133.13,host.docker.internal
+      - NO_PROXY=.example.org,127.0.0.0/8,localhost,123.249.78.135,host.docker.internal
     ports:
       - "7437:7437"
     volumes:

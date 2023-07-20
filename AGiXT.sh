@@ -143,7 +143,7 @@ update() {
     cd ..
   fi
   echo "${BOLD}${YELLOW}Updating Docker Images...${RESET}"
-  docker-compose pull
+#  docker-compose pull
   echo "${BOLD}${YELLOW}Updates Completed...${RESET}"
 }
 
@@ -163,7 +163,7 @@ docker_install() {
       git clone https://github.com/AGiXT/streamlit
   fi
 
-  echo "${BOLD}${GREEN}Running Docker install...${RESET}"
+  echo "${BOLD}${GREEN}Updating Docker ImageRunning Docker install...${RESET}"
   echo "${BOLD}${YELLOW}Starting Docker Compose...${RESET}"
   if [[ "$DB_CONNECTED" == "true" ]]; then
     docker-compose -f docker-compose-postgres.yml up

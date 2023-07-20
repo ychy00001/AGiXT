@@ -63,3 +63,4 @@ agents/
 text-generation-webui/
 # testing
 **/.ipynb_checkpoints/
+.DS_Store
