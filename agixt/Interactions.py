@@ -166,7 +166,7 @@ class Interactions:
     ):
         logging.info(f"BEGIN RUN")
         shots = int(shots)
-        disable_memory = True if str(disable_memory).lower() != "true" else False
+        disable_memory = True if str(disable_memory).lower() == "true" else False
         browse_links = True if str(browse_links).lower() == "true" else False
         if conversation_name != "":
             conversation_name = f"{self.agent_name} History"
