@@ -36,20 +36,20 @@ environment_setup() {
         fi
         read -p "Do you have your own AGiXT Hub fork that you would like to install with? (Y for yes, N for No): " hub_repo
         if [[ "$hub_repo" == [Yy]* ]]; then
-            read -p "Enter your AGiXT Hub fork repo name (e.g. AGiXT/light-hub): " github_repo
+            read -p "Enter your AGiXT Hub fork repo name (e.g. AGiXT/hub): " github_repo
             read -p "Is your AGiXT Hub fork private? It will require credentials if it is not public. (Y for yes, N for No): " is_private
             if [[ "$is_private" == [Yy]* ]]; then
                 read -p "Enter your GitHub username: " github_username
                 read -p "Enter your GitHub token: " github_token
             fi
         fi
-        read -p "Enter the number of AGiXT workers to run with, default is 4: " workers
+        read -p "Enter the number of AGiXT workers to run with, default is 10: " workers
         if [[ "$workers" != "" ]]; then
             if [[ $workers =~ ^[0-9]+$ && $workers -gt 0 ]]; then
                 agixt_workers=$workers
             else
-                echo "Invalid number of workers, defaulting to 4"
-                agixt_workers=4
+                echo "Invalid number of workers, defaulting to 10"
+                agixt_workers=10
             fi
         fi
         read -p "Do you intend to run local models? (Y for yes, N for No): " local_models
@@ -81,10 +81,10 @@ environment_setup() {
         fi
         echo "DB_CONNECTED=${db_connection:-false}" >> .env
         echo "AGIXT_AUTO_UPDATE=${auto_update:-true}" >> .env
-        echo "AGIXT_HUB=${github_repo:-AGiXT/light-hub}" >> .env
+        echo "AGIXT_HUB=${github_repo:-AGiXT/hub}" >> .env
         echo "AGIXT_URI=${agixt_uri:-http://localhost:7437}" >> .env
         echo "AGIXT_API_KEY=${api_key:-}" >> .env
-        echo "UVICORN_WORKERS=${agixt_workers:-4}" >> .env
+        echo "UVICORN_WORKERS=${agixt_workers:-10}" >> .env
         echo "GITHUB_USER=${github_username:-}" >> .env
         echo "GITHUB_TOKEN=${github_token:-}" >> .env
         echo "POSTGRES_SERVER=${postgres_host:-db}" >> .env
@@ -232,7 +232,16 @@ local_install() {
   sed -i '/^TEXTGEN_URI=/d' .env
   echo "TEXTGEN_URI=http://localhost:5000" >> .env
   source .env
+  echo "${BOLD}${YELLOW}Updating the repository...${RESET}"
   if [[ "$AGIXT_AUTO_UPDATE" == "true" ]]; then
+    echo "${BOLD}${YELLOW}Upgrading pip...${RESET}"
+    pip install --upgrade pip
+    sleep 1
+
+    echo "${BOLD}${YELLOW}Installing requirements...${RESET}"
+    pip install -r requirements.txt --upgrade
+    sleep 1
+
     echo "${BOLD}${YELLOW}Checking for updates...${RESET}"
     git pull
     if [ ! -d "streamlit" ]; then
@@ -241,24 +250,23 @@ local_install() {
     fi
     cd streamlit
     git pull
+    pip install -r requirements.txt --upgrade
     cd ..
   fi
 
   echo "${BOLD}${GREEN}Running local install...${RESET}"
-  echo "${BOLD}${YELLOW}Updating the repository...${RESET}"
+
   git pull
   sleep 1
 
   # Check if the directory exists
-  if [ ! -d "agixt/providers" ]; then
+  if [ ! -d "agixt/extensions" ]; then
       echo "${BOLD}${YELLOW}Upgrading pip...${RESET}"
       pip install --upgrade pip
       sleep 1
 
       echo "${BOLD}${YELLOW}Installing requirements...${RESET}"
-      pip install -r static-requirements.txt
-      sleep 1
-      pip install -r requirements.txt
+      pip install -r requirements.txt --upgrade
       sleep 1
 
       echo "${BOLD}${YELLOW}Installing Playwright dependencies...${RESET}"
@@ -270,7 +278,7 @@ local_install() {
       echo "${BOLD}${YELLOW}Installing Streamlit dependencies...${RESET}"
       git clone https://github.com/AGiXT/streamlit
       cd streamlit
-      pip install -r requirements.txt
+      pip install -r requirements.txt --upgrade
       sleep 1
   fi
 
@@ -292,7 +300,6 @@ wipe_hub() {
       "agixt/chains"
       "agixt/.github"
       "agixt/prompts"
-      "agixt/providers"
       "agixt/LICENSE"
       "agixt/README.md"
       "agixt/"*_main.zip

@@ -2,14 +2,13 @@ from datetime import datetime
 import yaml
 import os
 import logging
+import uuid
 
 
-def export_conversation(agent_name, conversation_name=None):
+def export_conversation(conversation_name=None, agent_name=None):
     if not conversation_name:
-        conversation_name = f"{agent_name} History"
-    history_file = os.path.join(
-        "conversations", agent_name, f"{conversation_name}.yaml"
-    )
+        conversation_name = uuid.uuid4()
+    history_file = os.path.join("conversations", f"{conversation_name}.yaml")
     if os.path.exists(history_file):
         with open(history_file, "r") as file:
             history = yaml.safe_load(file)
@@ -17,52 +16,41 @@ def export_conversation(agent_name, conversation_name=None):
     return {"interactions": []}
 
 
-def get_conversation(agent_name, conversation_name=None, limit=100, page=1):
-    if not conversation_name:
-        conversation_name = f"{agent_name} History"
-    history_file = os.path.join(
-        "conversations", agent_name, f"{conversation_name}.yaml"
-    )
-    os.makedirs(os.path.dirname(history_file), exist_ok=True)
-    if os.path.exists(history_file):
-        with open(history_file, "r") as file:
-            history = yaml.safe_load(file)
-        if not history:
-            history = {"interactions": []}
-        return history
-    return new_conversation(agent_name=agent_name, conversation_name=conversation_name)
-
-
-def get_conversations(agent_name):
-    agent_dir = os.path.join("conversations", agent_name)
-    if os.path.exists(agent_dir):
-        conversations = os.listdir(agent_dir)
-        return [conversation.split(".")[0] for conversation in conversations]
-    new_conversation(agent_name=agent_name, conversation_name=f"{agent_name} History")
-    return [f"{agent_name} History"]
-
-
-def new_conversation(agent_name, conversation_name):
+def get_conversation(conversation_name=None, limit=100, page=1, agent_name=None):
     history = {"interactions": []}
-    history_file = os.path.join(
-        "conversations", agent_name, f"{conversation_name}.yaml"
-    )
+    try:
+        history_file = os.path.join("conversations", f"{conversation_name}.yaml")
+        if os.path.exists(history_file):
+            with open(history_file, "r") as file:
+                history = yaml.safe_load(file)
+    except:
+        new_conversation(conversation_name=conversation_name)
+    return history
+
+
+def get_conversations(agent_name=None):
+    conversation_dir = os.path.join("conversations")
+    if os.path.exists(conversation_dir):
+        conversations = os.listdir(conversation_dir)
+        return [conversation.split(".")[0] for conversation in conversations]
+    new_conversation(conversation_name=uuid.uuid4())
+    return [uuid.uuid4()]
+
+
+def new_conversation(conversation_name, agent_name=None):
+    history = {"interactions": []}
+    history_file = os.path.join("conversations", f"{conversation_name}.yaml")
     os.makedirs(os.path.dirname(history_file), exist_ok=True)
     with open(history_file, "w") as file:
         yaml.safe_dump(history, file)
     return history
 
 
-def log_interaction(role: str, message: str, agent_name: str, conversation_name=None):
-    logging.info(f"----FB log_interaction")
-    history = get_conversation(
-        agent_name=agent_name, conversation_name=conversation_name
-    )
-    history_file = os.path.join(
-        "conversations", agent_name, f"{conversation_name}.yaml"
-    )
-    logging.info(f"----FB CREATE CONVERSION")
-    os.makedirs(os.path.dirname(history_file), exist_ok=True)
+def log_interaction(role: str, message: str, conversation_name=None, agent_name=None):
+    history = get_conversation(conversation_name=conversation_name)
+    history_file = os.path.join("conversations", f"{conversation_name}.yaml")
+    if not os.path.exists(history_file):
+        os.makedirs(os.path.dirname(history_file), exist_ok=True)
     if not history:
         history = {"interactions": []}
     if "interactions" not in history:
@@ -78,30 +66,22 @@ def log_interaction(role: str, message: str, agent_name: str, conversation_name=
         yaml.safe_dump(history, file)
 
 
-def delete_history(agent_name, conversation_name=None):
-    if not conversation_name:
-        conversation_name = f"{agent_name} History"
-    history_file = os.path.join(
-        "conversations", agent_name, f"{conversation_name}.yaml"
-    )
-
+def delete_history(conversation_name=None, agent_name=None):
+    history_file = os.path.join("conversations", f"{conversation_name}.yaml")
     if os.path.exists(history_file):
         os.remove(history_file)
 
 
-def delete_message(agent_name, message, conversation_name=None):
-    history = get_conversation(
-        agent_name=agent_name, conversation_name=conversation_name
-    )
-    history["interactions"] = [
-        interaction
-        for interaction in history["interactions"]
-        if interaction["message"] != message
-    ]
-    if not conversation_name:
-        conversation_name = "history"
-    history_file = os.path.join(
-        "conversations", agent_name, f"{conversation_name}.yaml"
-    )
-    with open(history_file, "w") as file:
-        yaml.safe_dump(history, file)
+def delete_message(message, conversation_name=None, agent_name=None):
+    if conversation_name:
+        history = get_conversation(
+            agent_name=agent_name, conversation_name=conversation_name
+        )
+        history["interactions"] = [
+            interaction
+            for interaction in history["interactions"]
+            if interaction["message"] != message
+        ]
+        history_file = os.path.join("conversations", f"{conversation_name}.yaml")
+        with open(history_file, "w") as file:
+            yaml.safe_dump(history, file)

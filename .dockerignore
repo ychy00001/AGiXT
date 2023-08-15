@@ -4,3 +4,7 @@ _book/
 docker/
 agixt/models/
 streamlit/
+examples/
+models/
+streamlit/
+text-generation-webui/

@@ -3,10 +3,12 @@ import os
 import regex
 import json
 import time
+import uuid
 import logging
-import asyncio
+import tiktoken
 from datetime import datetime
 from dotenv import load_dotenv
+from readers.website import WebsiteReader
 
 load_dotenv()
 
@@ -15,41 +17,55 @@ if db_connected:
     from db.Agent import Agent
     from db.Prompts import Prompts
     from db.Chain import Chain
-    from db.History import log_interaction
+    from db.History import log_interaction, get_conversation
 else:
     from fb.Agent import Agent
     from fb.Prompts import Prompts
     from fb.Chain import Chain
-    from fb.History import log_interaction
+    from fb.History import log_interaction, get_conversation
 
-from Embedding import get_tokens
 from concurrent.futures import Future
 from agixtsdk import AGiXTSDK
 from Websearch import Websearch
 
 ApiClient = AGiXTSDK(
-    base_uri="http://localhost:7437", api_key=os.getenv("AGIXT_API_KEY")
+    base_uri="http://localhost:7437", api_key=os.getenv("AGIXT_API_KEY", None)
 )
 chain = Chain()
 cp = Prompts()
 
 
+def get_tokens(text: str) -> int:
+    encoding = tiktoken.get_encoding("cl100k_base")
+    num_tokens = len(encoding.encode(text))
+    return num_tokens
+
+
 class Interactions:
-    def __init__(self, agent_name: str = ""):
-        logging.info(f"agent_name: {agent_name}")
+    def __init__(self, agent_name: str = "", collection_number: int = 0):
         if agent_name != "":
             self.agent_name = agent_name
             self.agent = Agent(self.agent_name)
             logging.info(f"before get commands: {agent_name}")
             self.agent_commands = self.agent.get_commands_string()
-            logging.info(f"after get commands: {self.agent_commands}")
-            self.memories = self.agent.get_memories()
-            self.websearch = Websearch(agent=self.agent, memories=self.memories)
+            self.websearch = Websearch(
+                agent_name=self.agent_name,
+                searxng_instance_url=self.agent.AGENT_CONFIG["settings"][
+                    "SEARXNG_INSTANCE_URL"
+                ]
+                if "SEARXNG_INSTANCE_URL" in self.agent.AGENT_CONFIG["settings"]
+                else "",
+            )
         else:
             self.agent_name = ""
             self.agent = None
             self.agent_commands = ""
-            self.memories = None
+
+        self.agent_memory = WebsiteReader(
+            agent_name=self.agent_name,
+            agent_config=self.agent.AGENT_CONFIG,
+            collection_number=int(collection_number),
+        )
         self.stop_running_event = None
         self.browsed_links = []
         self.failures = 0
@@ -71,35 +87,63 @@ class Interactions:
         return result
 
     async def format_prompt(
-            self,
-            user_input: str = "",
-            top_results: int = 5,
-            prompt="",
-            chain_name="",
-            step_number=0,
-            **kwargs,
+        self,
+        user_input: str = "",
+        top_results: int = 5,
+        prompt="",
+        prompt_category="Default",
+        chain_name="",
+        step_number=0,
+        conversation_name="",
+        **kwargs,
     ):
-        logging.info(f"BEGIN FORMATTED PROMPT USER INPUT: {user_input}")
-        if prompt == "":
-            prompt = user_input
-        else:
-            try:
-                prompt = cp.get_prompt(
-                    prompt_name=prompt,
-                    prompt_category=self.agent.AGENT_CONFIG["settings"]["AI_MODEL"],
-                )
-            except:
-                prompt = prompt
+        if "user_input" in kwargs and user_input == "":
+            user_input = kwargs["user_input"]
+        prompt_name = prompt if prompt != "" else "Custom Input"
+        try:
+            prompt = cp.get_prompt(
+                prompt_name=prompt_name,
+                prompt_category=self.agent.AGENT_CONFIG["settings"]["AI_MODEL"]
+                if prompt_category == "Default"
+                else prompt_category,
+            )
+        except:
+            prompt = prompt_name
         logging.info(f"CONTEXT RESULTS: {top_results}")
         if top_results == 0:
             context = ""
         else:
-            # try:
-            context = await self.memories.context_agent(
-                query=user_input, top_results_num=top_results
-            )
-            # except:
-            # context = ""
+            if user_input:
+                min_relevance_score = 0.0
+                if "min_relevance_score" in kwargs:
+                    try:
+                        min_relevance_score = float(kwargs["min_relevance_score"])
+                    except:
+                        min_relevance_score = 0.0
+                context = await self.agent_memory.get_memories(
+                    user_input=user_input,
+                    limit=top_results,
+                    min_relevance_score=min_relevance_score,
+                )
+                if "inject_memories_from_collection_number" in kwargs:
+                    context += await WebsiteReader(
+                        agent_name=self.agent_name,
+                        agent_config=self.agent.AGENT_CONFIG,
+                        collection_number=int(
+                            kwargs["inject_memories_from_collection_number"]
+                        ),
+                    ).get_memories(
+                        user_input=user_input,
+                        limit=top_results,
+                        min_relevance_score=min_relevance_score,
+                    )
+                if context != []:
+                    context = "\n".join(context)
+                    context = f"The user's input causes you remember these things:\n{context}\n"
+                else:
+                    context = ""
+            else:
+                context = ""
         command_list = self.agent.get_commands_string()
         logging.info(f"COMMAND_LIST: {command_list}")
         if chain_name != "":
@@ -136,7 +180,26 @@ class Interactions:
                 ]
             else:
                 helper_agent_name = self.agent_name
-        logging.info(f"AGENT_COMMANDS: {self.agent_commands}")
+        if "conversation_name" in kwargs:
+            conversation_name = kwargs["conversation_name"]
+        if conversation_name == "":
+            conversation_name = uuid.uuid4()
+        conversation = get_conversation(
+            agent_name=self.agent_name,
+            conversation_name=conversation_name,
+        )
+        conversation_history = "\n".join(
+            [
+                f"{interaction['timestamp']} {interaction['role']}: {interaction['message']} \n "
+                for interaction in conversation["interactions"]
+            ]
+        )
+        # Get only the last 5 interactions
+        conversation_history = "\n".join(
+            conversation_history.split("\n")[-5:],
+        )
+        if "conversation_history" in kwargs:
+            del kwargs["conversation_history"]
         formatted_prompt = self.custom_format(
             string=prompt,
             user_input=user_input,
@@ -147,6 +210,7 @@ class Interactions:
             date=datetime.now().strftime("%B %d, %Y %I:%M %p"),
             working_directory=working_directory,
             helper_agent_name=helper_agent_name,
+            conversation_history=conversation_history,
             **kwargs,
         )
 
@@ -155,26 +219,31 @@ class Interactions:
         return formatted_prompt, prompt, tokens
 
     async def run(
-            self,
-            user_input: str = "",
-            prompt: str = "",
-            context_results: int = 5,
-            websearch: bool = False,
-            websearch_depth: int = 3,
-            chain_name: str = "",
-            step_number: int = 0,
-            shots: int = 1,
-            disable_memory: bool = False,
-            conversation_name: str = "",
-            browse_links: bool = False,
-            **kwargs,
+        self,
+        user_input: str = "",
+        prompt: str = "",
+        context_results: int = 5,
+        websearch: bool = False,
+        websearch_depth: int = 3,
+        chain_name: str = "",
+        step_number: int = 0,
+        shots: int = 1,
+        disable_memory: bool = False,
+        conversation_name: str = "",
+        browse_links: bool = False,
+        prompt_category: str = "Default",
+        **kwargs,
     ):
         logging.info(f"BEGIN RUN")
         shots = int(shots)
+        if "prompt_category" in kwargs:
+            prompt_category = kwargs["prompt_category"]
         disable_memory = True if str(disable_memory).lower() == "true" else False
         browse_links = True if str(browse_links).lower() == "true" else False
+        if "conversation_name" in kwargs:
+            conversation_name = kwargs["conversation_name"]
         if conversation_name == "":
-            conversation_name = f"{self.agent_name} History"
+            conversation_name = uuid.uuid4()
         if "WEBSEARCH_TIMEOUT" in self.agent.PROVIDER_SETTINGS:
             logging.info(f"====WEBSEARCH_TIMEOUT IN SETTINGS")
             try:
@@ -195,23 +264,24 @@ class Interactions:
                     if link not in self.websearch.browsed_links:
                         logging.info(f"Browsing link: {link}")
                         self.websearch.browsed_links.append(link)
-                        text_content, link_list = await self.memories.read_website(
-                            url=link
-                        )
-                        if link_list is not None and len(link_list) > 0:
-                            i = 0
-                            for sublink in link_list:
-                                if sublink[1] not in self.websearch.browsed_links:
-                                    logging.info(f"Browsing link: {sublink[1]}")
-                                    if i <= 10:
-                                        (
-                                            text_content,
-                                            link_list,
-                                        ) = await self.memories.read_website(
-                                            url=sublink[1]
-                                        )
-                                        i = i + 1
-            logging.info(f"END BROWSE_LINKS")
+                        (
+                            text_content,
+                            link_list,
+                        ) = await self.agent_memory.write_website_to_memory(url=link)
+                        if int(websearch_depth) > 0:
+                            if link_list is not None and len(link_list) > 0:
+                                i = 0
+                                for sublink in link_list:
+                                    if sublink[1] not in self.websearch.browsed_links:
+                                        logging.info(f"Browsing link: {sublink[1]}")
+                                        if i <= websearch_depth:
+                                            (
+                                                text_content,
+                                                link_list,
+                                            ) = await self.agent_memory.write_website_to_memory(
+                                                url=sublink[1]
+                                            )
+                                            i = i + 1
         if websearch:
             logging.info(f"BEGIN WBE_SEARCH")
             if user_input == "":
@@ -224,16 +294,18 @@ class Interactions:
             if search_string != "":
                 await self.websearch.websearch_agent(
                     user_input=search_string,
-                    depth=websearch_depth,
-                    timeout=websearch_timeout,
+                    websearch_depth=websearch_depth,
+                    websearch_timeout=websearch_timeout,
                 )
             logging.info(f"END WBE_SEARCH")
         formatted_prompt, unformatted_prompt, tokens = await self.format_prompt(
             user_input=user_input,
             top_results=int(context_results),
             prompt=prompt,
+            prompt_category=prompt_category,
             chain_name=chain_name,
             step_number=step_number,
+            conversation_name=conversation_name,
             **kwargs,
         )
         try:
@@ -279,6 +351,8 @@ class Interactions:
                 execution_response=self.response,
                 user_input=user_input,
                 context_results=context_results,
+                disable_memory=disable_memory,
+                conversation_name=conversation_name,
                 **kwargs,
             )
             return_response = ""
@@ -315,36 +389,24 @@ class Interactions:
         if self.response != "" and self.response != None:
             if disable_memory != True:
                 try:
-                    logging.info(f"disable_memory != True store_result: {self.response}")
-                    await self.memories.store_result(
-                        input=user_input, result=self.response
+                    await self.agent_memory.write_text_to_memory(
+                        user_input=user_input,
+                        text=self.response,
                     )
                 except:
                     pass
-            if user_input != "":
-                logging.info(f"===user_input!='': {self.response}")
-                log_interaction(
-                    agent_name=self.agent_name,
-                    conversation_name=conversation_name,
-                    role="USER",
-                    message=user_input,
-                )
-            else:
-                logging.info(f"===user_input=='': {self.response}")
-                log_interaction(
-                    agent_name=self.agent_name,
-                    conversation_name=conversation_name,
-                    role="USER",
-                    message=formatted_prompt,
-                )
-            logging.info(f"===log_interaction response'': {self.response}")
+            log_interaction(
+                agent_name=self.agent_name,
+                conversation_name=conversation_name,
+                role="USER",
+                message=user_input if user_input != "" else formatted_prompt,
+            )
             log_interaction(
                 agent_name=self.agent_name,
                 conversation_name=conversation_name,
                 role=self.agent_name,
                 message=self.response,
             )
-        logging.info(f"===BEGIN shots")
         if shots > 1:
             logging.info(f"===shots>1")
             responses = [self.response]
@@ -358,6 +420,7 @@ class Interactions:
                         "user_input": user_input,
                         "context_results": context_results,
                         "conversation_name": conversation_name,
+                        "disable_memory": disable_memory,
                         **kwargs,
                     },
                 )
@@ -373,7 +436,13 @@ class Interactions:
 
     # Worker Sub-Agents
     async def validation_agent(
-            self, user_input, execution_response, context_results, **kwargs
+        self,
+        user_input,
+        execution_response,
+        context_results,
+        disable_memory,
+        conversation_name,
+        **kwargs,
     ):
         try:
             pattern = regex.compile(r"\{(?:[^{}]|(?R))*\}")
@@ -398,6 +467,8 @@ class Interactions:
                 prompt_args={
                     "user_input": user_input,
                     "context_results": context_results,
+                    "conversation_name": conversation_name,
+                    "disable_memory": disable_memory,
                     **kwargs,
                 },
             )
@@ -405,6 +476,8 @@ class Interactions:
                 user_input=user_input,
                 execution_response=execution_response,
                 context_results=context_results,
+                disable_memory=disable_memory,
+                conversation_name=conversation_name,
                 **kwargs,
             )
 
@@ -431,12 +504,20 @@ class Interactions:
         return f"The command has been added to a chain called '{agent_name} Command Suggestions' for you to review and execute manually."
 
     async def execution_agent(
-            self, execution_response, user_input, context_results, **kwargs
+        self,
+        execution_response,
+        user_input,
+        context_results,
+        disable_memory,
+        conversation_name,
+        **kwargs,
     ):
         validated_response = await self.validation_agent(
             user_input=user_input,
             execution_response=execution_response,
             context_results=context_results,
+            disable_memory=disable_memory,
+            conversation_name=conversation_name,
             **kwargs,
         )
         if "commands" in validated_response:
@@ -452,6 +533,9 @@ class Interactions:
                                         command_name=command_name,
                                         command_args=command_args,
                                     )
+                                    message = (
+                                        f"Executed Command: {command_name} with args {command_args}.\nCommand Output: {command_output}",
+                                    )
                                 else:
                                     command_output = (
                                         self.create_command_suggestion_chain(
@@ -459,6 +543,9 @@ class Interactions:
                                             command_name=command_name,
                                             command_args=command_args,
                                         )
+                                    )
+                                    message = (
+                                        f"Agent execution chain for command {command_name} with args {command_args} updated.",
                                     )
                             except Exception as e:
                                 logging.info("Command validation failed, retrying...")
@@ -471,6 +558,8 @@ class Interactions:
                                         "command_output": e,
                                         "user_input": user_input,
                                         "context_results": context_results,
+                                        "conversation_name": conversation_name,
+                                        "disable_memory": disable_memory,
                                         **kwargs,
                                     },
                                 )
@@ -478,13 +567,18 @@ class Interactions:
                                     execution_response=validate_command,
                                     user_input=user_input,
                                     context_results=context_results,
+                                    disable_memory=disable_memory,
+                                    conversation_name=conversation_name,
                                     **kwargs,
                                 )
-                            logging.info(
-                                f"Command {command_name} executed successfully with args {command_args}. Command Output: {command_output}"
+                            log_interaction(
+                                agent_name=self.agent_name,
+                                conversation_name=conversation_name,
+                                role="PYTHON-TERMINAL",
+                                message=message,
                             )
-                            response = f"\nExecuted Command:{command_name} with args {command_args}.\nCommand Output: {command_output}\n"
-                            return response
+                            logging.info(message)
+                            return f"\n{message}\n"
                 else:
                     if command_name == "None.":
                         return "\nNo commands were executed.\n"

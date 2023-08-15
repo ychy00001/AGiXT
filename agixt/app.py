@@ -5,15 +5,15 @@ import base64
 import string
 import random
 import time
-from fastapi import FastAPI, HTTPException, Depends, Request, Header
+from fastapi import FastAPI, HTTPException, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from Interactions import Interactions
+from Interactions import Interactions, get_tokens
 from Embedding import Embedding
 from dotenv import load_dotenv
 
 load_dotenv()
-AGIXT_API_KEY = os.getenv("AGIXT_API_KEY")
+AGIXT_API_KEY = os.getenv("AGIXT_API_KEY", None)
 db_connected = True if os.getenv("DB_CONNECTED", "false").lower() == "true" else False
 if db_connected:
     from db.Agent import Agent, add_agent, delete_agent, rename_agent, get_agents
@@ -40,8 +40,12 @@ else:
 
 from typing import Optional, Dict, List, Any
 from Providers import get_provider_options, get_providers
-from Embedding import get_embedding_providers, get_tokens
+from Embedding import get_embedding_providers, get_embedders
 from Extensions import Extensions
+from Chains import Chains
+from readers.github import GithubReader
+from readers.file import FileReader
+from readers.website import WebsiteReader
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
@@ -70,26 +74,26 @@ app.add_middleware(
 )
 
 
-async def get_api_key(authorization: str = Header(None)):
+def verify_api_key(authorization: str = Header(None)):
+    # Check if the API key is set up in the environment
     if AGIXT_API_KEY:
+        # If no authorization header is provided, raise an error
         if authorization is None:
             raise HTTPException(
                 status_code=400, detail="Authorization header is missing"
             )
         scheme, _, api_key = authorization.partition(" ")
+        # If the scheme isn't "Bearer", raise an error
         if scheme.lower() != "bearer":
             raise HTTPException(
                 status_code=400, detail="Authorization scheme is not Bearer"
             )
+        # If the provided API key doesn't match the expected one, raise an error
+        if api_key != AGIXT_API_KEY:
+            raise HTTPException(status_code=403, detail="Invalid API Key")
         return api_key
     else:
-        return None
-
-
-def verify_api_key(api_key: str = Depends(get_api_key)):
-    if AGIXT_API_KEY and api_key != AGIXT_API_KEY:
-        raise HTTPException(status_code=403, detail="Invalid API Key")
-    return api_key
+        return 1
 
 
 class AgentName(BaseModel):
@@ -103,6 +107,12 @@ class AgentNewName(BaseModel):
 class AgentPrompt(BaseModel):
     prompt_name: str
     prompt_args: dict
+
+
+class AgentMemoryQuery(BaseModel):
+    user_input: str
+    limit: int = 5
+    min_relevance_score: float = 0.0
 
 
 class Objective(BaseModel):
@@ -119,6 +129,10 @@ class PromptName(BaseModel):
 
 class PromptList(BaseModel):
     prompts: List[str]
+
+
+class PromptCategoryList(BaseModel):
+    prompt_categories: List[str]
 
 
 class Completions(BaseModel):
@@ -159,11 +173,13 @@ class RunChain(BaseModel):
     agent_override: Optional[str] = ""
     all_responses: Optional[bool] = False
     from_step: Optional[int] = 1
+    chain_args: Optional[dict] = {}
 
 
 class RunChainStep(BaseModel):
     prompt: str
     agent_override: Optional[str] = ""
+    chain_args: Optional[dict] = {}
 
 
 class StepInfo(BaseModel):
@@ -198,6 +214,7 @@ class ResponseMessage(BaseModel):
 
 class UrlInput(BaseModel):
     url: str
+    collection_number: int = 0
 
 
 class EmbeddingModel(BaseModel):
@@ -208,6 +225,13 @@ class EmbeddingModel(BaseModel):
 class FileInput(BaseModel):
     file_name: str
     file_content: str
+    collection_number: int = 0
+
+
+class TextMemoryInput(BaseModel):
+    user_input: str
+    text: str
+    collection_number: int = 0
 
 
 class TaskOutput(BaseModel):
@@ -259,6 +283,15 @@ class ConversationHistoryMessageModel(BaseModel):
     message: str
 
 
+class GitHubInput(BaseModel):
+    github_repo: str
+    github_user: str = None
+    github_token: str = None
+    github_branch: str = "main"
+    use_agent_settings: bool = False
+    collection_number: int = 0
+
+
 @app.get("/api/provider", tags=["Provider"], dependencies=[Depends(verify_api_key)])
 async def getproviders():
     providers = get_providers()
@@ -275,6 +308,7 @@ async def get_provider_settings(provider_name: str):
     return {"settings": settings}
 
 
+# Gets list of embedding providers
 @app.get(
     "/api/embedding_providers",
     tags=["Provider"],
@@ -283,6 +317,16 @@ async def get_provider_settings(provider_name: str):
 async def get_embed_providers():
     providers = get_embedding_providers()
     return {"providers": providers}
+
+
+# Gets embedders with their details such as required parameters and chunk sizes
+@app.get(
+    "/api/embedders",
+    tags=["Provider"],
+    dependencies=[Depends(verify_api_key)],
+)
+async def get_embedder_info() -> Dict[str, Any]:
+    return {"embedders": get_embedders()}
 
 
 @app.post("/api/agent", tags=["Agent"], dependencies=[Depends(verify_api_key)])
@@ -319,9 +363,52 @@ async def update_agent_settings(
     return ResponseMessage(message=update_config)
 
 
+# Get memories
+@app.post(
+    "/api/agent/{agent_name}/memory/{collection_number}/query",
+    tags=["Memory"],
+    dependencies=[Depends(verify_api_key)],
+)
+async def query_memories(
+    agent_name: str, memory: AgentMemoryQuery, collection_number=0
+) -> Dict[str, Any]:
+    try:
+        collection_number = int(collection_number)
+    except:
+        collection_number = 0
+    agent_config = Agent(agent_name=agent_name).get_agent_config()
+    memories = await WebsiteReader(
+        agent_name=agent_name,
+        agent_config=agent_config,
+        collection_number=collection_number,
+    ).get_memories_data(
+        user_input=memory.user_input,
+        limit=memory.limit,
+        min_relevance_score=memory.min_relevance_score,
+    )
+    return {"memories": memories}
+
+
+@app.post(
+    "/api/agent/{agent_name}/learn/text",
+    tags=["Memory"],
+    dependencies=[Depends(verify_api_key)],
+)
+async def learn_text(agent_name: str, data: TextMemoryInput) -> ResponseMessage:
+    agent_config = Agent(agent_name=agent_name).get_agent_config()
+    await WebsiteReader(
+        agent_name=agent_name,
+        agent_config=agent_config,
+        collection_number=data.collection_number,
+    ).write_text_to_memory(user_input=data.user_input, text=data.text)
+    return ResponseMessage(
+        message="Agent learned the content from the text assocated with the user input."
+    )
+
+
 @app.post(
     "/api/agent/{agent_name}/learn/file",
-    tags=["Agent"],
+    tags=["Memory"],
     dependencies=[Depends(verify_api_key)],
 )
 async def learn_file(agent_name: str, file: FileInput) -> ResponseMessage:
@@ -335,8 +422,12 @@ async def learn_file(agent_name: str, file: FileInput) -> ResponseMessage:
     with open(file_path, "wb") as f:
         f.write(file_content)
     try:
-        memories = Agent(agent_name=agent_name).get_memories()
-        await memories.read_file(file_path=file_path)
+        agent_config = Agent(agent_name=agent_name).get_agent_config()
+        await FileReader(
+            agent_name=agent_name,
+            agent_config=agent_config,
+            collection_number=file.collection_number,
+        ).write_file_to_memory(file_path=file_path)
         try:
             os.remove(file_path)
         except Exception:
@@ -352,16 +443,86 @@ async def learn_file(agent_name: str, file: FileInput) -> ResponseMessage:
 
 @app.post(
     "/api/agent/{agent_name}/learn/url",
-    tags=["Agent"],
+    tags=["Memory"],
     dependencies=[Depends(verify_api_key)],
 )
 async def learn_url(agent_name: str, url: UrlInput) -> ResponseMessage:
+    agent_config = Agent(agent_name=agent_name).get_agent_config()
+    await WebsiteReader(
+        agent_name=agent_name,
+        agent_config=agent_config,
+        collection_number=url.collection_number,
+    ).write_website_to_memory(url=url.url)
+    return ResponseMessage(message="Agent learned the content from the url.")
+
+
+@app.post(
+    "/api/agent/{agent_name}/learn/github",
+    tags=["Memory"],
+    dependencies=[Depends(verify_api_key)],
+)
+async def learn_github_repo(agent_name: str, git: GitHubInput) -> ResponseMessage:
+    agent_config = Agent(agent_name=agent_name).get_agent_config()
+    await GithubReader(
+        agent_name=agent_name,
+        agent_config=agent_config,
+        collection_number=git.collection_number,
+        use_agent_settings=git.use_agent_settings,
+    ).write_github_repository_to_memory(
+        github_repo=git.github_repo,
+        github_user=git.github_user,
+        github_token=git.github_token,
+        github_branch=git.github_branch,
+    )
+    return ResponseMessage(
+        message="Agent learned the content from the GitHub Repository."
+    )
+
+
+@app.delete(
+    "/api/agent/{agent_name}/memory",
+    tags=["Memory"],
+    dependencies=[Depends(verify_api_key)],
+)
+async def wipe_agent_memories(agent_name: str) -> ResponseMessage:
+    await WebsiteReader(agent_name=agent_name, collection_number=0).wipe_memory()
+    return ResponseMessage(message=f"Memories for agent {agent_name} deleted.")
+
+
+@app.delete(
+    "/api/agent/{agent_name}/memory/{collection_number}",
+    tags=["Memory"],
+    dependencies=[Depends(verify_api_key)],
+)
+async def wipe_agent_memories(agent_name: str, collection_number=0) -> ResponseMessage:
     try:
-        memories = Agent(agent_name=agent_name).get_memories()
-        await memories.read_website(url=url.url)
-        return ResponseMessage(message="Agent learned the content from the url.")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        collection_number = int(collection_number)
+    except:
+        collection_number = 0
+    await WebsiteReader(
+        agent_name=agent_name, collection_number=collection_number
+    ).wipe_memory()
+    return ResponseMessage(message=f"Memories for agent {agent_name} deleted.")
+
+
+@app.delete(
+    "/api/agent/{agent_name}/memory/{collection_number}/{memory_id}",
+    tags=["Memory"],
+    dependencies=[Depends(verify_api_key)],
+)
+async def delete_agent_memory(
+    agent_name: str, collection_number=0, memory_id=""
+) -> ResponseMessage:
+    try:
+        collection_number = int(collection_number)
+    except:
+        collection_number = 0
+    await WebsiteReader(
+        agent_name=agent_name, collection_number=collection_number
+    ).delete_memory(key=memory_id)
+    return ResponseMessage(
+        message=f"Memory {memory_id} for agent {agent_name} deleted."
+    )
 
 
 @app.put(
@@ -402,7 +563,7 @@ async def get_agentconfig(agent_name: str):
 
 @app.get(
     "/api/{agent_name}/conversations",
-    tags=["Agent"],
+    tags=["Conversation"],
     dependencies=[Depends(verify_api_key)],
 )
 async def get_conversations_list(agent_name: str):
@@ -414,7 +575,25 @@ async def get_conversations_list(agent_name: str):
     return {"conversations": conversations}
 
 
-@app.get("/api/conversation", tags=["Agent"], dependencies=[Depends(verify_api_key)])
+@app.get(
+    "/api/conversations",
+    tags=["Conversation"],
+    dependencies=[Depends(verify_api_key)],
+)
+async def get_conversations_list():
+    conversations = get_conversations(
+        agent_name="OpenAI",
+    )
+    if conversations is None:
+        conversations = []
+    return {"conversations": conversations}
+
+
+@app.get(
+    "/api/conversation",
+    tags=["Conversation"],
+    dependencies=[Depends(verify_api_key)],
+)
 async def get_conversation_history(history: HistoryModel):
     conversation_history = get_conversation(
         agent_name=history.agent_name,
@@ -430,7 +609,11 @@ async def get_conversation_history(history: HistoryModel):
     return {"conversation_history": conversation_history}
 
 
-@app.post("/api/conversation", tags=["Agent"], dependencies=[Depends(verify_api_key)])
+@app.post(
+    "/api/conversation",
+    tags=["Conversation"],
+    dependencies=[Depends(verify_api_key)],
+)
 async def new_conversation_history(history: ConversationHistoryModel):
     new_conversation(
         agent_name=history.agent_name,
@@ -441,7 +624,7 @@ async def new_conversation_history(history: ConversationHistoryModel):
 
 @app.delete(
     "/api/conversation",
-    tags=["Agent"],
+    tags=["Conversation"],
     dependencies=[Depends(verify_api_key)],
 )
 async def delete_conversation_history(
@@ -457,7 +640,7 @@ async def delete_conversation_history(
 
 @app.delete(
     "/api/conversation/message",
-    tags=["Agent"],
+    tags=["Conversation"],
     dependencies=[Depends(verify_api_key)],
 )
 async def delete_history_message(
@@ -466,19 +649,9 @@ async def delete_history_message(
     delete_message(
         agent_name=history.agent_name,
         message=history.message,
-        conversation_name=f"{history.agent_name} History",
+        conversation_name=history.conversation_name,
     )
     return ResponseMessage(message=f"Message deleted.")
-
-
-@app.delete(
-    "/api/agent/{agent_name}/memory",
-    tags=["Agent"],
-    dependencies=[Depends(verify_api_key)],
-)
-async def wipe_agent_memories(agent_name: str) -> ResponseMessage:
-    Agent(agent_name=agent_name).wipe_agent_memories()
-    return ResponseMessage(message=f"Memories for agent {agent_name} deleted.")
 
 
 @app.post(
@@ -496,11 +669,13 @@ async def prompt_agent(agent_name: str, agent_prompt: AgentPrompt):
     return {"response": str(response)}
 
 
-@app.post("/api/v1/completions", tags=["Agent"], dependencies=[Depends(verify_api_key)])
+@app.post(
+    "/api/v1/completions", tags=["Completions"], dependencies=[Depends(verify_api_key)]
+)
 async def completion(prompt: Completions):
     # prompt.model is the agent name
     agent = Interactions(agent_name=prompt.model)
-    agent_config = Agent(agent_name=prompt.model).get_agent_config()
+    agent_config = agent.agent.AGENT_CONFIG
     if "settings" in agent_config:
         if "AI_MODEL" in agent_config["settings"]:
             model = agent_config["settings"]["AI_MODEL"]
@@ -542,12 +717,14 @@ async def completion(prompt: Completions):
 
 
 @app.post(
-    "/api/v1/chat/completions", tags=["Agent"], dependencies=[Depends(verify_api_key)]
+    "/api/v1/chat/completions",
+    tags=["Completions"],
+    dependencies=[Depends(verify_api_key)],
 )
 async def chat_completion(prompt: Completions):
     # prompt.model is the agent name
     agent = Interactions(agent_name=prompt.model)
-    agent_config = Agent(agent_name=prompt.model).get_agent_config()
+    agent_config = agent.agent.AGENT_CONFIG
     if "settings" in agent_config:
         if "AI_MODEL" in agent_config["settings"]:
             model = agent_config["settings"]["AI_MODEL"]
@@ -593,12 +770,17 @@ async def chat_completion(prompt: Completions):
 
 
 # Use agent name in the model field to use embedding.
-@app.post("/api/v1/embedding", tags=["Agent"], dependencies=[Depends(verify_api_key)])
+@app.post(
+    "/api/v1/embedding", tags=["Completions"], dependencies=[Depends(verify_api_key)]
+)
 async def embedding(embedding: EmbeddingModel):
     agent_name = embedding.model
     agent_config = Agent(agent_name=agent_name).get_agent_config()
+    agent_settings = agent_config["settings"] if "settings" in agent_config else None
     tokens = get_tokens(embedding.input)
-    embedding = Embedding(AGENT_CONFIG=agent_config).embed_text(embedding.input)
+    embedding = Embedding(agent_settings=agent_settings).embed_text(
+        text=embedding.input
+    )
     return {
         "data": [{"embedding": embedding, "index": 0, "object": "embedding"}],
         "model": agent_name,
@@ -685,13 +867,16 @@ async def get_chain_responses(chain_name: str):
     dependencies=[Depends(verify_api_key)],
 )
 async def run_chain(chain_name: str, user_input: RunChain):
-    chain_response = await Chain().run_chain(
+    chain_response = await Chains().run_chain(
         chain_name=chain_name,
         user_input=user_input.prompt,
         agent_override=user_input.agent_override,
         all_responses=user_input.all_responses,
         from_step=user_input.from_step,
+        chain_args=user_input.chain_args,
     )
+    if "Chain failed to complete" in chain_response:
+        raise HTTPException(status_code=500, detail=chain_response)
     return chain_response
 
 
@@ -709,13 +894,32 @@ async def run_chain_step(chain_name: str, step_number: str, user_input: RunChain
         raise HTTPException(
             status_code=404, detail=f"Step {step_number} not found. {e}"
         )
-    chain_step_response = await chain.run_chain_step(
+    chain_step_response = await Chains().run_chain_step(
         step=step,
         chain_name=chain_name,
         user_input=user_input.prompt,
         agent_override=user_input.agent_override,
+        chain_args=user_input.chain_args,
     )
+    if chain_step_response == None:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error running step {step_number} in chain {chain_name}",
+        )
+    if "Chain failed to complete" in chain_step_response:
+        raise HTTPException(status_code=500, detail=chain_step_response)
     return chain_step_response
+
+
+# Get chain args
+@app.get(
+    "/api/chain/{chain_name}/args",
+    tags=["Chain"],
+    dependencies=[Depends(verify_api_key)],
+)
+async def get_chain_args(chain_name: str):
+    chain_args = Chains().get_chain_args(chain_name=chain_name)
+    return {"chain_args": chain_args}
 
 
 @app.post("/api/chain", tags=["Chain"], dependencies=[Depends(verify_api_key)])
@@ -812,27 +1016,53 @@ async def delete_step(chain_name: str, step_number: int) -> ResponseMessage:
     return {"message": f"Step {step_number} deleted from chain '{chain_name}'."}
 
 
-@app.post("/api/prompt", tags=["Prompt"], dependencies=[Depends(verify_api_key)])
-async def add_prompt(prompt: CustomPromptModel) -> ResponseMessage:
+@app.post(
+    "/api/prompt/{prompt_category}",
+    tags=["Prompt"],
+    dependencies=[Depends(verify_api_key)],
+)
+async def add_prompt(
+    prompt: CustomPromptModel, prompt_category: str = "Default"
+) -> ResponseMessage:
     try:
-        Prompts().add_prompt(prompt_name=prompt.prompt_name, prompt=prompt.prompt)
+        Prompts().add_prompt(
+            prompt_name=prompt.prompt_name,
+            prompt=prompt.prompt,
+            prompt_category_name=prompt_category,
+        )
         return ResponseMessage(message=f"Prompt '{prompt.prompt_name}' added.")
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.get(
-    "/api/prompt/{prompt_name}",
+    "/api/prompt/{prompt_category}/{prompt_name}",
     tags=["Prompt"],
     response_model=CustomPromptModel,
     dependencies=[Depends(verify_api_key)],
 )
-async def get_prompt(prompt_name: str):
-    # try:
-    prompt_content = Prompts().get_prompt(prompt_name=prompt_name)
+async def get_prompt_with_category(prompt_name: str, prompt_category: str = "Default"):
+    prompt_content = Prompts().get_prompt(
+        prompt_name=prompt_name, prompt_category=prompt_category
+    )
+    return {
+        "prompt_name": prompt_name,
+        "prompt_category": prompt_category,
+        "prompt": prompt_content,
+    }
+
+
+@app.get(
+    "/api/prompt/{prompt_category}/{prompt_name}",
+    tags=["Prompt"],
+    response_model=CustomPromptModel,
+    dependencies=[Depends(verify_api_key)],
+)
+async def get_prompt(prompt_name: str, prompt_category: str = "Default"):
+    prompt_content = Prompts().get_prompt(
+        prompt_name=prompt_name, prompt_category=prompt_category
+    )
     return {"prompt_name": prompt_name, "prompt": prompt_content}
-    # except Exception as e:
-    #    raise HTTPException(status_code=404, detail=str(e))
 
 
 @app.get(
@@ -843,6 +1073,29 @@ async def get_prompt(prompt_name: str):
 )
 async def get_prompts():
     prompts = Prompts().get_prompts()
+    return {"prompts": prompts}
+
+
+# Get prompt categories
+@app.get(
+    "/api/prompt/categories",
+    response_model=PromptCategoryList,
+    tags=["Prompt"],
+    dependencies=[Depends(verify_api_key)],
+)
+async def get_prompt_categories():
+    prompt_categories = Prompts().get_prompt_categories()
+    return {"prompt_categories": prompt_categories}
+
+
+@app.get(
+    "/api/prompt/{prompt_category}",
+    response_model=PromptList,
+    tags=["Prompt"],
+    dependencies=[Depends(verify_api_key)],
+)
+async def get_prompts(prompt_category: str = "Default"):
+    prompts = Prompts().get_prompts(prompt_category=prompt_category)
     return {"prompts": prompts}
 
 
@@ -859,11 +1112,19 @@ async def delete_prompt(prompt_name: str) -> ResponseMessage:
 
 # Rename prompt
 @app.patch(
-    "/api/prompt/{prompt_name}", tags=["Prompt"], dependencies=[Depends(verify_api_key)]
+    "/api/prompt/{prompt_category}/{prompt_name}",
+    tags=["Prompt"],
+    dependencies=[Depends(verify_api_key)],
 )
-async def rename_prompt(prompt_name: str, new_name: PromptName) -> ResponseMessage:
+async def rename_prompt(
+    prompt_name: str, new_name: PromptName, prompt_category: str = "Default"
+) -> ResponseMessage:
     try:
-        Prompts().rename_prompt(prompt_name=prompt_name, new_name=new_name.prompt_name)
+        Prompts().rename_prompt(
+            prompt_name=prompt_name,
+            new_name=new_name.prompt_name,
+            prompt_category=prompt_category,
+        )
         return ResponseMessage(
             message=f"Prompt '{prompt_name}' renamed to '{new_name.prompt_name}'."
         )
@@ -872,24 +1133,32 @@ async def rename_prompt(prompt_name: str, new_name: PromptName) -> ResponseMessa
 
 
 @app.put(
-    "/api/prompt/{prompt_name}", tags=["Prompt"], dependencies=[Depends(verify_api_key)]
+    "/api/prompt/{prompt_category}/{prompt_name}",
+    tags=["Prompt"],
+    dependencies=[Depends(verify_api_key)],
 )
-async def update_prompt(prompt: CustomPromptModel) -> ResponseMessage:
+async def update_prompt(
+    prompt: CustomPromptModel, prompt_category_name: str = "Default"
+) -> ResponseMessage:
     try:
-        Prompts().update_prompt(prompt_name=prompt.prompt_name, prompt=prompt.prompt)
+        Prompts().update_prompt(
+            prompt_name=prompt.prompt_name,
+            prompt=prompt.prompt,
+            prompt_category_name=prompt_category_name,
+        )
         return ResponseMessage(message=f"Prompt '{prompt.prompt_name}' updated.")
     except Exception as e:
         raise HTTPException(status_code=404, detail=str(e))
 
 
 @app.get(
-    "/api/prompt/{prompt_name}/args",
+    "/api/prompt/{prompt_category}/{prompt_name}/args",
     tags=["Prompt"],
     dependencies=[Depends(verify_api_key)],
 )
-async def get_prompt_arg(prompt_name: str):
+async def get_prompt_arg(prompt_name: str, prompt_category: str = "Default"):
     prompt_name = prompt_name.replace("%20", " ")
-    prompt = Prompts().get_prompt(prompt_name=prompt_name)
+    prompt = Prompts().get_prompt(prompt_name=prompt_name, prompt_category="Default")
     return {"prompt_args": Prompts().get_prompt_args(prompt)}
 
 
@@ -907,14 +1176,14 @@ async def get_extension_settings():
 
 @app.get(
     "/api/extensions/{command_name}/args",
-    tags=["Extension"],
+    tags=["Extensions"],
     dependencies=[Depends(verify_api_key)],
 )
 async def get_command_args(command_name: str):
     return {"command_args": Extensions().get_command_args(command_name=command_name)}
 
 
-@app.get("/api/extensions", tags=["Extension"], dependencies=[Depends(verify_api_key)])
+@app.get("/api/extensions", tags=["Extensions"], dependencies=[Depends(verify_api_key)])
 async def get_extensions():
     extensions = Extensions().get_extensions()
     return {"extensions": extensions}

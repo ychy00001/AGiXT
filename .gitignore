@@ -21,6 +21,7 @@ frontend/
 Agent-LLM-Frontend/
 *.code-workspace
 src/
+conversations/
 # probably mounted data
 agixt/agents/*
 agixt/data/*
@@ -28,7 +29,6 @@ agixt/WORKSPACE/*
 agixt/models/*
 agixt/extensions
 agixt/chains
-agixt/providers
 agixt/conversations
 agixt/.github
 agixt/prompts
@@ -60,6 +60,8 @@ chains/
 data/
 prompts/
 agents/
+memories/
+onnx/
 text-generation-webui/
 # testing
 **/.ipynb_checkpoints/
