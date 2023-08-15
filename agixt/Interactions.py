@@ -36,10 +36,13 @@ cp = Prompts()
 
 class Interactions:
     def __init__(self, agent_name: str = ""):
+        logging.info(f"agent_name: {agent_name}")
         if agent_name != "":
             self.agent_name = agent_name
             self.agent = Agent(self.agent_name)
+            logging.info(f"before get commands: {agent_name}")
             self.agent_commands = self.agent.get_commands_string()
+            logging.info(f"after get commands: {self.agent_commands}")
             self.memories = self.agent.get_memories()
             self.websearch = Websearch(agent=self.agent, memories=self.memories)
         else:
@@ -68,13 +71,13 @@ class Interactions:
         return result
 
     async def format_prompt(
-        self,
-        user_input: str = "",
-        top_results: int = 5,
-        prompt="",
-        chain_name="",
-        step_number=0,
-        **kwargs,
+            self,
+            user_input: str = "",
+            top_results: int = 5,
+            prompt="",
+            chain_name="",
+            step_number=0,
+            **kwargs,
     ):
         logging.info(f"BEGIN FORMATTED PROMPT USER INPUT: {user_input}")
         if prompt == "":
@@ -98,6 +101,7 @@ class Interactions:
             # except:
             # context = ""
         command_list = self.agent.get_commands_string()
+        logging.info(f"COMMAND_LIST: {command_list}")
         if chain_name != "":
             try:
                 for arg, value in kwargs.items():
@@ -132,6 +136,7 @@ class Interactions:
                 ]
             else:
                 helper_agent_name = self.agent_name
+        logging.info(f"AGENT_COMMANDS: {self.agent_commands}")
         formatted_prompt = self.custom_format(
             string=prompt,
             user_input=user_input,
@@ -150,27 +155,28 @@ class Interactions:
         return formatted_prompt, prompt, tokens
 
     async def run(
-        self,
-        user_input: str = "",
-        prompt: str = "",
-        context_results: int = 5,
-        websearch: bool = False,
-        websearch_depth: int = 3,
-        chain_name: str = "",
-        step_number: int = 0,
-        shots: int = 1,
-        disable_memory: bool = False,
-        conversation_name: str = "",
-        browse_links: bool = False,
-        **kwargs,
+            self,
+            user_input: str = "",
+            prompt: str = "",
+            context_results: int = 5,
+            websearch: bool = False,
+            websearch_depth: int = 3,
+            chain_name: str = "",
+            step_number: int = 0,
+            shots: int = 1,
+            disable_memory: bool = False,
+            conversation_name: str = "",
+            browse_links: bool = False,
+            **kwargs,
     ):
         logging.info(f"BEGIN RUN")
         shots = int(shots)
-        disable_memory = True if str(disable_memory).lower() != "true" else False
+        disable_memory = True if str(disable_memory).lower() == "true" else False
         browse_links = True if str(browse_links).lower() == "true" else False
-        if conversation_name != "":
+        if conversation_name == "":
             conversation_name = f"{self.agent_name} History"
         if "WEBSEARCH_TIMEOUT" in self.agent.PROVIDER_SETTINGS:
+            logging.info(f"====WEBSEARCH_TIMEOUT IN SETTINGS")
             try:
                 websearch_timeout = int(
                     self.agent.PROVIDER_SETTINGS["WEBSEARCH_TIMEOUT"]
@@ -179,6 +185,7 @@ class Interactions:
                 websearch_timeout = 0
         else:
             websearch_timeout = 0
+        logging.info(f"====WEBSEARCH_TIMEOUT {websearch_timeout}")
         logging.info(f"RECREATE VARIABLE")
         if browse_links != False:
             logging.info(f"BEGIN BROWSE_LINKS")
@@ -238,9 +245,9 @@ class Interactions:
                 else run_response
             )
         except Exception as e:
-            logging.info(f"Error: {e}")
-            logging.info(f"PROMPT CONTENT: {formatted_prompt}")
-            logging.info(f"TOKENS: {tokens}")
+            logging.error(f"Error: {e}")
+            logging.error(f"PROMPT CONTENT: {formatted_prompt}")
+            logging.error(f"TOKENS: {tokens}")
             self.failures += 1
             if self.failures == 5:
                 self.failures == 0
@@ -279,7 +286,7 @@ class Interactions:
                 autonomous = (
                     True
                     if self.agent.AGENT_CONFIG["settings"]["AUTONOMOUS_EXECUTION"]
-                    == True
+                       == True
                     else False
                 )
             else:
@@ -304,16 +311,18 @@ class Interactions:
             else:
                 return_response = f"{self.response}\n\n{execution_response}"
             self.response = return_response
-        logging.info(f"Response: {self.response}")
+        logging.info(f"===Response: {self.response}")
         if self.response != "" and self.response != None:
             if disable_memory != True:
                 try:
+                    logging.info(f"disable_memory != True store_result: {self.response}")
                     await self.memories.store_result(
                         input=user_input, result=self.response
                     )
                 except:
                     pass
             if user_input != "":
+                logging.info(f"===user_input!='': {self.response}")
                 log_interaction(
                     agent_name=self.agent_name,
                     conversation_name=conversation_name,
@@ -321,20 +330,23 @@ class Interactions:
                     message=user_input,
                 )
             else:
+                logging.info(f"===user_input=='': {self.response}")
                 log_interaction(
                     agent_name=self.agent_name,
                     conversation_name=conversation_name,
                     role="USER",
                     message=formatted_prompt,
                 )
+            logging.info(f"===log_interaction response'': {self.response}")
             log_interaction(
                 agent_name=self.agent_name,
                 conversation_name=conversation_name,
                 role=self.agent_name,
                 message=self.response,
             )
-
+        logging.info(f"===BEGIN shots")
         if shots > 1:
+            logging.info(f"===shots>1")
             responses = [self.response]
             for shot in range(shots - 1):
                 shot_response = ApiClient.prompt_agent(
@@ -361,7 +373,7 @@ class Interactions:
 
     # Worker Sub-Agents
     async def validation_agent(
-        self, user_input, execution_response, context_results, **kwargs
+            self, user_input, execution_response, context_results, **kwargs
     ):
         try:
             pattern = regex.compile(r"\{(?:[^{}]|(?R))*\}")
@@ -401,7 +413,7 @@ class Interactions:
         chain_name = f"{agent_name} Command Suggestions"
         if chain_name in chains:
             step = (
-                int(ApiClient.get_chain(chain_name=chain_name)["steps"][-1]["step"]) + 1
+                    int(ApiClient.get_chain(chain_name=chain_name)["steps"][-1]["step"]) + 1
             )
         else:
             ApiClient.add_chain(chain_name=chain_name)
@@ -419,7 +431,7 @@ class Interactions:
         return f"The command has been added to a chain called '{agent_name} Command Suggestions' for you to review and execute manually."
 
     async def execution_agent(
-        self, execution_response, user_input, context_results, **kwargs
+            self, execution_response, user_input, context_results, **kwargs
     ):
         validated_response = await self.validation_agent(
             user_input=user_input,

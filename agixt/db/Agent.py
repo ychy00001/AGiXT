@@ -1,6 +1,7 @@
 import os
 import json
 import shutil
+import logging
 from DBConnection import (
     Agent as AgentModel,
     AgentSetting as AgentSettingModel,
@@ -201,6 +202,7 @@ class Agent:
     def __init__(self, agent_name=None):
         self.agent_name = agent_name if agent_name is not None else "AGiXT"
         self.AGENT_CONFIG = self.get_agent_config()
+        logging.info(f"====AGENT_CONFIG: {self.AGENT_CONFIG}")
         self.load_config_keys()
         if "settings" not in self.AGENT_CONFIG:
             self.AGENT_CONFIG["settings"] = {}
@@ -241,7 +243,7 @@ class Agent:
             )
             if agent_setting:
                 config = json.loads(agent_setting.value)
-
+                logging.info(f"=====agent_config: {config}")
                 # Retrieve the enabled commands for the agent
                 agent_commands = (
                     session.query(AgentCommand)
@@ -275,6 +277,7 @@ class Agent:
         return answer
 
     def get_commands_string(self):
+        logging.info(f"get_commands_strin friendly_namesg: {self.available_commands}")
         if len(self.available_commands) == 0:
             return None
 

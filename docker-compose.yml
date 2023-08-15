@@ -21,11 +21,15 @@ services:
       - ./agents:/agixt/agents
       - ./chains:/agixt/chains
       - ./prompts:/agixt/prompts
+      - ./conversations:/agixt/conversations
+      - ./extensions:/agixt/extensions
       - ./WORKSPACE:/agixt/WORKSPACE
   streamlit:
     image: joshxt/streamlit:latest
     depends_on:
       - agixt
+    volumes:
+      - ./streamlit:/app
     environment:
       - AGIXT_HUB=${AGIXT_HUB:-AGiXT/light-hub}
       - AGIXT_URI=${AGIXT_URI:-http://agixt:7437}

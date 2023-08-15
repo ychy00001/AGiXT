@@ -1,5 +1,6 @@
 import os
 import yaml
+import logging
 from datetime import datetime
 from DBConnection import (
     Conversation,
@@ -133,6 +134,7 @@ def new_conversation(agent_name, conversation_name):
 
 
 def log_interaction(agent_name, conversation_name, role, message):
+    logging.info(f"----DB log_interaction")
     agent = session.query(Agent).filter(Agent.name == agent_name).first()
     if not agent:
         print(f"Agent '{agent_name}' not found in the database.")
@@ -146,7 +148,7 @@ def log_interaction(agent_name, conversation_name, role, message):
         )
         .first()
     )
-
+    logging.info(f"----DB CREATE CONVERSION")
     if not conversation:
         # Create a new conversation if it doesn't exist
         conversation = Conversation(agent_id=agent.id, name=conversation_name)
@@ -161,9 +163,11 @@ def log_interaction(agent_name, conversation_name, role, message):
         timestamp=timestamp,
         conversation_id=conversation.id,
     )
+    logging.info(f"----BUILD MESSAGE")
     session.add(new_message)
+    logging.info(f"----ADD MESSAGE")
     session.commit()
-
+    logging.info(f"----COMMIT MESSAGE")
     print(f"Logged interaction: [{timestamp}] {role}: {message}")
 
 

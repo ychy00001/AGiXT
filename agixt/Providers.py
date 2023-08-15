@@ -61,3 +61,10 @@ class Providers:
 
 def __getattr__(name):
     return Providers(name)
+
+if __name__ == '__main__':
+    providers = []
+    for provider in glob.glob("providers/*.py"):
+        if "__init__.py" not in provider:
+            providers.append(os.path.splitext(os.path.basename(provider))[0])
+    print(providers)

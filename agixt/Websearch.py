@@ -29,10 +29,10 @@ ApiClient = AGiXTSDK(
 
 class Websearch:
     def __init__(
-        self,
-        agent: Agent,
-        memories: Memories,
-        **kwargs,
+            self,
+            agent: Agent,
+            memories: Memories,
+            **kwargs,
     ):
         self.agent = agent
         self.memories = memories
@@ -114,7 +114,7 @@ class Websearch:
                             if len(collected_data) > 0:
                                 tokens = get_tokens(collected_data)
                                 chunks = [
-                                    collected_data[i : i + chunk_size]
+                                    collected_data[i: i + chunk_size]
                                     for i in range(
                                         0,
                                         int(tokens),
@@ -189,52 +189,61 @@ class Websearch:
                                     logging.info(f"Issues reading {url}. Moving on...")
 
     async def search(self, query: str) -> List[str]:
-        if self.searx_instance_url == "":
-            try:  # SearXNG - List of these at https://searx.space/
-                response = requests.get("https://searx.space/data/instances.json")
-                data = json.loads(response.text)
-                if self.failures != []:
-                    for failure in self.failures:
-                        if failure in data["instances"]:
-                            del data["instances"][failure]
-                servers = list(data["instances"].keys())
-                random_index = random.randint(0, len(servers) - 1)
-                self.searx_instance_url = servers[random_index]
-            except:  # Select default remote server that typically works if unable to get list.
-                self.searx_instance_url = "https://search.us.projectsegfau.lt"
-        server = self.searx_instance_url.rstrip("/")
-        endpoint = f"{server}/search"
-        try:
-            logging.info(f"Trying to connect to SearXNG Search at {endpoint}...")
-            response = requests.get(
-                endpoint,
-                params={
-                    "q": query,
-                    "language": "en",
-                    "safesearch": 1,
-                    "format": "json",
-                },
-            )
-            results = response.json()
-            summaries = [
-                result["title"] + " - " + result["url"] for result in results["results"]
-            ]
-            if len(summaries) < 1:
-                self.failures.append(self.searx_instance_url)
-                self.searx_instance_url = ""
-                return await self.search(query=query)
-            return summaries
-        except:
-            self.failures.append(self.searx_instance_url)
-            self.searx_instance_url = ""
-            # The SearXNG server is down or refusing connection, so we will use the default one.
-            return await self.search(query=query)
+        summaries = await self.agent.execute(
+            command_name="Google Customer Search",
+            command_args={"query": query, "num_results": 3},
+        )
+        logging.info(f"Search Summaries {summaries}")
+        return summaries
+
+    # TODO 使用google搜索替换默认的searNGX搜索
+    # async def search(self, query: str) -> List[str]:
+    #     if self.searx_instance_url == "":
+    #         try:  # SearXNG - List of these at https://searx.space/
+    #             response = requests.get("https://searx.space/data/instances.json")
+    #             data = json.loads(response.text)
+    #             if self.failures != []:
+    #                 for failure in self.failures:
+    #                     if failure in data["instances"]:
+    #                         del data["instances"][failure]
+    #             servers = list(data["instances"].keys())
+    #             random_index = random.randint(0, len(servers) - 1)
+    #             self.searx_instance_url = servers[random_index]
+    #         except:  # Select default remote server that typically works if unable to get list.
+    #             self.searx_instance_url = "https://search.us.projectsegfau.lt"
+    #     server = self.searx_instance_url.rstrip("/")
+    #     endpoint = f"{server}/search"
+    #     try:
+    #         logging.info(f"Trying to connect to SearXNG Search at {endpoint}...")
+    #         response = requests.get(
+    #             endpoint,
+    #             params={
+    #                 "q": query,
+    #                 "language": "en",
+    #                 "safesearch": 1,
+    #                 "format": "json",
+    #             },
+    #         )
+    #         results = response.json()
+    #         summaries = [
+    #             result["title"] + " - " + result["url"] for result in results["results"]
+    #         ]
+    #         if len(summaries) < 1:
+    #             self.failures.append(self.searx_instance_url)
+    #             self.searx_instance_url = ""
+    #             return await self.search(query=query)
+    #         return summaries
+    #     except:
+    #         self.failures.append(self.searx_instance_url)
+    #         self.searx_instance_url = ""
+    #         # The SearXNG server is down or refusing connection, so we will use the default one.
+    #         return await self.search(query=query)
 
     async def websearch_agent(
-        self,
-        user_input: str = "What are the latest breakthroughs in AI?",
-        depth: int = 3,
-        timeout: int = 0,
+            self,
+            user_input: str = "What are the latest breakthroughs in AI?",
+            depth: int = 3,
+            timeout: int = 0,
     ):
         results = ApiClient.prompt_agent(
             agent_name=self.agent_name,
@@ -245,13 +254,14 @@ class Websearch:
             },
         )
         results = results.split("\n")
+        logging.info(f"====SEARCH_PROMPT_RESULTS:{ results }")
         if len(results) > 0:
             for result in results:
                 links = []
                 search_string = result.lstrip("0123456789. ")
-                logging.info(f"Searching for: {search_string}")
+                logging.info(f"===Searching for: {search_string}")
                 links = await self.search(query=search_string)
-                logging.info(f"Found {len(links)} results for {search_string}")
+                logging.info(f"====Found {len(links)} results for {search_string}")
                 if len(links) > depth:
                     links = links[:depth]
                 if links is not None and len(links) > 0:

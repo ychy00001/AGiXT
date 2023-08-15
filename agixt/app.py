@@ -38,12 +38,10 @@ else:
         new_conversation,
     )
 
-
 from typing import Optional, Dict, List, Any
 from Providers import get_provider_options, get_providers
 from Embedding import get_embedding_providers, get_tokens
 from Extensions import Extensions
-
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
@@ -313,7 +311,7 @@ async def renameagent(agent_name: str, new_name: AgentNewName) -> ResponseMessag
     "/api/agent/{agent_name}", tags=["Agent"], dependencies=[Depends(verify_api_key)]
 )
 async def update_agent_settings(
-    agent_name: str, settings: AgentSettings
+        agent_name: str, settings: AgentSettings
 ) -> ResponseMessage:
     update_config = Agent(agent_name=agent_name).update_agent_config(
         new_config=settings.settings, config_key="settings"
@@ -372,7 +370,7 @@ async def learn_url(agent_name: str, url: UrlInput) -> ResponseMessage:
     dependencies=[Depends(verify_api_key)],
 )
 async def update_agent_commands(
-    agent_name: str, commands: AgentCommands
+        agent_name: str, commands: AgentCommands
 ) -> ResponseMessage:
     update_config = Agent(agent_name=agent_name).update_agent_config(
         new_config=commands.commands, config_key="commands"
@@ -447,7 +445,7 @@ async def new_conversation_history(history: ConversationHistoryModel):
     dependencies=[Depends(verify_api_key)],
 )
 async def delete_conversation_history(
-    history: ConversationHistoryModel,
+        history: ConversationHistoryModel,
 ) -> ResponseMessage:
     delete_history(
         agent_name=history.agent_name, conversation_name=history.conversation_name
@@ -463,7 +461,7 @@ async def delete_conversation_history(
     dependencies=[Depends(verify_api_key)],
 )
 async def delete_history_message(
-    history: ConversationHistoryMessageModel,
+        history: ConversationHistoryMessageModel,
 ) -> ResponseMessage:
     delete_message(
         agent_name=history.agent_name,
@@ -494,6 +492,7 @@ async def prompt_agent(agent_name: str, agent_prompt: AgentPrompt):
         prompt=agent_prompt.prompt_name,
         **agent_prompt.prompt_args,
     )
+    logging.info(f"======prompt_agent:{response}")
     return {"response": str(response)}
 
 
@@ -624,7 +623,7 @@ async def get_commands(agent_name: str):
     dependencies=[Depends(verify_api_key)],
 )
 async def toggle_command(
-    agent_name: str, payload: ToggleCommandPayload
+        agent_name: str, payload: ToggleCommandPayload
 ) -> ResponseMessage:
     agent = Agent(agent_name=agent_name)
     try:
@@ -771,7 +770,7 @@ async def add_step(chain_name: str, step_info: StepInfo) -> ResponseMessage:
     dependencies=[Depends(verify_api_key)],
 )
 async def update_step(
-    chain_name: str, step_number: int, chain_step: ChainStep
+        chain_name: str, step_number: int, chain_step: ChainStep
 ) -> ResponseMessage:
     Chain().update_step(
         chain_name=chain_name,
@@ -791,7 +790,7 @@ async def update_step(
     dependencies=[Depends(verify_api_key)],
 )
 async def move_step(
-    chain_name: str, chain_step_new_info: ChainStepNewInfo
+        chain_name: str, chain_step_new_info: ChainStepNewInfo
 ) -> ResponseMessage:
     Chain().move_step(
         chain_name=chain_name,

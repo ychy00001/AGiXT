@@ -1,6 +1,7 @@
 from datetime import datetime
 import yaml
 import os
+import logging
 
 
 def export_conversation(agent_name, conversation_name=None):
@@ -53,12 +54,14 @@ def new_conversation(agent_name, conversation_name):
 
 
 def log_interaction(role: str, message: str, agent_name: str, conversation_name=None):
+    logging.info(f"----FB log_interaction")
     history = get_conversation(
         agent_name=agent_name, conversation_name=conversation_name
     )
     history_file = os.path.join(
         "conversations", agent_name, f"{conversation_name}.yaml"
     )
+    logging.info(f"----FB CREATE CONVERSION")
     os.makedirs(os.path.dirname(history_file), exist_ok=True)
     if not history:
         history = {"interactions": []}

@@ -95,11 +95,15 @@ class Memories:
             self.chroma_client._client.persist()
 
     async def context_agent(self, query: str, top_results_num: int) -> List[str]:
+        logging.info(f"Begin get_embedder")
         embedder, chunk_size = await self.get_embedder()
+        logging.info(f"End get_embedder")
         collection = await self.get_collection()
         if collection == None:
             return []
+        logging.info(f"BEGIN Embedding")
         embed = await Embedding(AGENT_CONFIG=self.agent_config).embed_text(text=query)
+        logging.info(f"END Embedding")
         try:
             results = await self.chroma_client.get_nearest_matches_async(
                 collection_name="memories",
